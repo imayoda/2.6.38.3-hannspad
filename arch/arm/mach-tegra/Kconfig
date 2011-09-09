@@ -30,6 +30,11 @@ config MACH_ADAM
        bool "Notion Ink Adam"
        help
          Support for the Notion Ink Adam tablet
+         
+config MACH_SMBA1002
+       bool "Malata smba1002"
+       help
+         Support for the Malata smba1002
 
 config MACH_AEBL
        bool "Aebl board"
