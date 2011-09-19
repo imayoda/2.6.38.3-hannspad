@@ -51,9 +51,9 @@
 #define SMBA1002_FB_PAGES		2				/* At least, 2 video pages */
 #define SMBA1002_FB_HDMI_PAGES	2				/* At least, 2 video pages for HDMI */
 
-// smba1002 memory is 2xSZ_512M
+// smba1002 memory is 1xSZ_512M
 #define SMBA1002_MEM_SIZE 		SZ_512M			/* Total memory */
-#define SMBA1002_MEM_BANKS		2
+#define SMBA1002_MEM_BANKS		1
 
 #define SMBA1002_GPU_MEM_SIZE 		SZ_128M		/* Memory reserved for GPU */
 //#define SMBA1002_GPU_MEM_SIZE 	SZ_64M			/* Memory reserved for GPU */
