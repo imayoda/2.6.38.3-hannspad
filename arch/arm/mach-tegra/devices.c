@@ -912,4 +912,3 @@ struct platform_device tegra_rtc_device = {
         .resource       = tegra_rtc_resources,
         .num_resources  = ARRAY_SIZE(tegra_rtc_resources),
 };
-

@@ -13,6 +13,15 @@ obj-y                                   += pinmux.o
 obj-y                                   += powergate.o
 obj-y					+= fuse.o
 obj-y					+= kfuse.o
+ifeq ($(CONFIG_SND_TEGRA_SOC),y)
+obj-$(CONFIG_ARCH_TEGRA_2x_SOC)         += tegra2_i2s.o
+obj-y                                   += audio_manager.o
+else
+obj-y                                   += tegra_i2s_audio.o
+obj-y                                   += tegra_spdif_audio.o
+endif
+obj-y                                   += spdif.o
+obj-y                                   += tegra_das.o
 obj-y					+= suspend.o
 obj-y					+= mc.o
 obj-$(CONFIG_FIQ)			+= fiq.o
@@ -102,6 +111,7 @@ obj-${CONFIG_MACH_ADAM}              += board-adam-pm-gsm.o
 # smba1002 arch drivers
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-aes.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-audio.o
+obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-jack.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-bootinfo.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-bt.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-camera.o
@@ -120,6 +130,7 @@ obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-sensors.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-spi.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-touch.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-uart.o
+obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-wake.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-usb.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-wdt.o
 #obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-wlan.o
