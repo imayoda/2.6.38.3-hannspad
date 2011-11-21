@@ -172,7 +172,7 @@ static struct tegra_ulpi_config ulpi_phy_config = {
 static struct tegra_ehci_platform_data tegra_ehci_pdata[] = {
 	[0] = {
 		.phy_config = &utmi_phy_config[0],
-		.operating_mode = TEGRA_USB_DEVICE, /* DEVICE is slave here */
+		.operating_mode = TEGRA_USB_HOST, /* Set as HOST because OTG mode does not work currently */
 		.power_down_on_bus_suspend = 1,
 	},
 	[1] = {
@@ -195,8 +195,10 @@ static struct platform_device *smba1002_usb_devices[] __initdata = {
 #ifdef CONFIG_USB_ANDROID_MASS_STORAGE
 	&tegra_usb_ums_device,
 #endif
-	&androidusb_device,		/* should come AFTER ums and acm */
-	&tegra_udc_device, 		/* USB gadget */
+	//&androidusb_device,		/* should come AFTER ums and acm */
+	//&tegra_udc_device, 		/* USB gadget */
+	//&tegra_otg_device,
+	&tegra_ehci1_device,
 	//&tegra_ehci2_device,
 	&tegra_ehci3_device,
 };
@@ -204,7 +206,7 @@ static struct platform_device *smba1002_usb_devices[] __initdata = {
 static struct usb_phy_plat_data tegra_usb_phy_pdata[] = {
 	[0] = {
 		.instance = 0,
-		.vbus_irq = TPS6586X_INT_BASE + TPS6586X_INT_USB_DET,
+		//.vbus_irq = PMU_IRQ_BASE + TPS6586X_INT_USB_DET,
 		.vbus_gpio = -1, 
 	},
 	[1] = {
@@ -221,7 +223,7 @@ int __init smba1002_usb_register_devices(void)
 {
 	int ret;
 	
-//	tegra_usb_phy_init(tegra_usb_phy_pdata, ARRAY_SIZE(tegra_usb_phy_pdata));
+	tegra_usb_phy_init(tegra_usb_phy_pdata, ARRAY_SIZE(tegra_usb_phy_pdata));
 	
 	tegra_ehci1_device.dev.platform_data = &tegra_ehci_pdata[0];
 	//tegra_ehci2_device.dev.platform_data = &tegra_ehci_pdata[1];

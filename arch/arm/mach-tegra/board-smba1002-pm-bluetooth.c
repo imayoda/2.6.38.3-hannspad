@@ -76,7 +76,7 @@ static void __smba1002_pm_bt_toggle_radio(struct device *dev, unsigned int on)
 		gpio_set_value(SMBA1002_BT_RESET, 0); /* Assert reset */
 		
 		clk_disable(bt_data->clk);
-		regulator_disable(bt_data->regulator);
+//		regulator_disable(bt_data->regulator);
 	}
 	
 	/* store new state */
