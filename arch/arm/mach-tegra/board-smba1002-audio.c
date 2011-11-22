@@ -15,7 +15,7 @@
  */
 
 /* All configurations related to audio */
-//#define ALC5624_IS_MASTER 
+#define ALC5623_IS_MASTER 
  
 #include <linux/console.h>
 #include <linux/kernel.h>
@@ -27,7 +27,7 @@
 #include <linux/i2c-tegra.h>
 #include <linux/i2c.h>
 #include <linux/version.h>
-#include <sound/alc5624.h>
+#include <sound/alc5623.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -57,7 +57,7 @@
    Bluetooth to codec: I2S2(DAC2)<->Dap4<->Bluetooth
 */
 /* For smba1002, 
-	Codec is ALC5624
+	Codec is ALC5623
 	Codec I2C Address = 0x34(includes R/W bit), i2c #0
 	Codec MCLK = APxx DAP_MCLK1
 */
@@ -136,7 +136,7 @@ static struct tegra_das_platform_data tegra_das_pdata = {
 			.con_id = tegra_das_port_con_id_hifi,
 			.num_entries = 2,
 			.con_line = { /*src*/            /*dst*/             /* src master */
-#ifdef ALC5624_IS_MASTER
+#ifdef ALC5623_IS_MASTER
 				[0] = {tegra_das_port_i2s1, tegra_das_port_dap1, true}, 
 				[1] = {tegra_das_port_dap1, tegra_das_port_i2s1, false},
 #else
@@ -151,7 +151,7 @@ static struct tegra_das_platform_data tegra_das_pdata = {
 			.con_line = {
 				[0] = {tegra_das_port_i2s2, tegra_das_port_dap4, true}, /* src is master */
 				[1] = {tegra_das_port_dap4, tegra_das_port_i2s2, false},
-#ifdef ALC5624_IS_MASTER
+#ifdef ALC5623_IS_MASTER
 				[2] = {tegra_das_port_i2s1, tegra_das_port_dap1, true},
 				[3] = {tegra_das_port_dap1, tegra_das_port_i2s1, false},
 #else				
@@ -166,7 +166,7 @@ static struct tegra_das_platform_data tegra_das_pdata = {
 			.con_line = {
 				[0] = {tegra_das_port_dap2, tegra_das_port_dap3, true},
 				[1] = {tegra_das_port_dap3, tegra_das_port_dap2, false},
-#ifdef ALC5624_IS_MASTER
+#ifdef ALC5623_IS_MASTER
 				[2] = {tegra_das_port_i2s1, tegra_das_port_dap1, true},
 				[3] = {tegra_das_port_dap1, tegra_das_port_i2s1, false},
 #else
@@ -189,7 +189,7 @@ static struct tegra_audio_platform_data tegra_spdif_pdata = {
 static struct tegra_audio_platform_data tegra_audio_pdata[] = {
 	/* For I2S1 - Hifi */
 	[0] = {
-#ifdef ALC5624_IS_MASTER
+#ifdef ALC5623_IS_MASTER
 		.i2s_master		= false,	/* CODEC is master for audio */
 		.dma_on			= true,  	/* use dma by default */
 		.i2s_clk_rate 	= 2822400,
@@ -228,7 +228,7 @@ static struct tegra_audio_platform_data tegra_audio_pdata[] = {
 	}
 }; 
 
-static struct alc5624_platform_data alc5624_pdata = {
+static struct alc5623_platform_data alc5623_pdata = {
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,38)
 	.mclk 		= "clk_dev1",
 #else
@@ -240,8 +240,8 @@ static struct alc5624_platform_data alc5624_pdata = {
 
 static struct i2c_board_info __initdata smba1002_i2c_bus0_board_info[] = {
 	{
-		I2C_BOARD_INFO("alc5624", 0x1a),
-		.platform_data = &alc5624_pdata,
+		I2C_BOARD_INFO("alc5623", 0x1a),
+		.platform_data = &alc5623_pdata,
 	},
 };
 

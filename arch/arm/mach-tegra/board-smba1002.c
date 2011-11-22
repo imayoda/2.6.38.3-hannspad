@@ -199,7 +199,7 @@ static void __init tegra_smba1002_init(void)
 	smba1002_gpu_register_devices();
 
 	/* Register Audio devices */
-	// smba1002_audio_register_devices();
+	smba1002_audio_register_devices();
 
 	/* Register AES encryption devices */
 	smba1002_aes_register_devices();

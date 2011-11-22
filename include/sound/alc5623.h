@@ -1,6 +1,9 @@
 #ifndef _INCLUDE_SOUND_ALC5623_H
 #define _INCLUDE_SOUND_ALC5623_H
 struct alc5623_platform_data {
+	char* 			mclk;			/* The MCLK, that is required to make the codec work */
+	unsigned int	spkvdd_mv;		/* Speaker Vdd in millivolts */
+	unsigned int	hpvdd_mv;		/* Headphone Vdd in millivolts */
 	/* configure :                              */
 	/* Lineout/Speaker Amps Vmid ratio control  */
 	/* enable/disable adc/dac high pass filters */
