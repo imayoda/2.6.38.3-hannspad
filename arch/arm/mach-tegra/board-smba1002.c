@@ -201,6 +201,9 @@ static void __init tegra_smba1002_init(void)
 	/* Register Audio devices */
 	smba1002_audio_register_devices();
 
+	/* Register Jack devices */
+	smba1002_jack_register_devices();
+
 	/* Register AES encryption devices */
 	smba1002_aes_register_devices();
 
