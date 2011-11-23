@@ -63,10 +63,6 @@ obj-${CONFIG_MACH_TEGRA_DT}             += board-dt.o
 obj-${CONFIG_MACH_TRIMSLICE}            += board-trimslice.o
 obj-${CONFIG_MACH_TRIMSLICE}            += board-trimslice-pinmux.o
 
-obj-${CONFIG_MACH_VENTANA}		+= board-ventana.o
-obj-${CONFIG_MACH_VENTANA}		+= board-ventana-pinmux.o
-obj-${CONFIG_MACH_VENTANA}		+= board-ventana-power.o
-
 # Adam arch drivers
 obj-${CONFIG_MACH_ADAM}              += board-adam-aes.o
 obj-${CONFIG_MACH_ADAM}              += board-adam-audio.o
@@ -131,4 +127,3 @@ obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-pm-camera.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-pm-gps.o
 obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-pm-gsm.o
 #obj-${CONFIG_MACH_SMBA1002}              += board-smba1002-pm-wlan.o
-

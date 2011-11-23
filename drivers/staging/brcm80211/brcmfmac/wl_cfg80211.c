@@ -40,14 +40,6 @@
 #include <wl_cfg80211.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,38)
-/* 2.6.38 doesn't have "band" arguement */
-#define ieee80211_channel_to_frequency(chan, band) \
-                ieee80211_channel_to_frequency(chan)
-
-#endif
-
-
 void sdioh_sdio_set_host_pm_flags(int flag);
 
 static struct sdio_func *cfg80211_sdio_func;
@@ -807,21 +799,20 @@ __wl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 		wl_set_mpc(ndev, 0);
 		err = wl_dev_ioctl(ndev, WLC_SCAN, &sr->ssid,
 				sizeof(sr->ssid));
-		if (err) {
+		if (!err) {
+			cfg80211_scan_done(wl->scan_request, false);
+		} else {
 			if (err == -EBUSY) {
 				WL_INFO("system busy : scan for \"%s\" canceled\n",
 					sr->ssid.SSID);
 			} else {
 				WL_ERR("WLC_SCAN error (%d)\n", err);
 			}
-			wl_set_mpc(ndev, 1);
-			goto scan_out;
 		}
 	}
 
-	return 0;
-
 scan_out:
+	wl_set_mpc(ndev, 1);
 	clear_bit(WL_STATUS_SCANNING, &wl->status);
 	wl->scan_request = NULL;
 	return err;

@@ -33,11 +33,17 @@
 
 #include <linux/fdtable.h>
 
-#define DBG(fmt, arg...)						\
-do {									\
-	if (qcusbnet_debug == 1)					\
-		printk(KERN_INFO "QCUSBNet2k::%s " fmt, __func__, ##arg); \
+extern int gobi_debug;
+
+#define GOBI_LOG(lvl, fmt, arg...) \
+do { \
+	if (lvl <= gobi_debug) \
+		printk(KERN_INFO "gobi: %s: " fmt, __func__, ##arg); \
 } while (0)
+
+#define GOBI_ERROR(fmt, arg...) GOBI_LOG(0, fmt, ##arg)
+#define GOBI_WARN(fmt, arg...)  GOBI_LOG(1, fmt, ##arg)
+#define GOBI_DEBUG(fmt, arg...) GOBI_LOG(2, fmt, ##arg)
 
 struct qcusbnet;
 
@@ -83,12 +89,18 @@ struct qcusbnet {
 	char meid[14];
 
 	struct workqueue_struct *workqueue;
+	spinlock_t urbs_lock;
 	struct list_head urbs;
 	struct urb *active;
 
 	struct work_struct startxmit;
 	struct work_struct txtimeout;
 	struct work_struct complete;
+
+	unsigned int iface_num;
+	unsigned int int_in_endp;
+	unsigned int bulk_in_endp;
+	unsigned int bulk_out_endp;
 };
 
 #endif /* !QCUSBNET_STRUCTS_H */

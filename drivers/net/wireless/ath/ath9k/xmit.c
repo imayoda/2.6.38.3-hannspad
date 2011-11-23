@@ -566,11 +566,30 @@ static void ath_tx_complete_aggr(struct ath_softc *sc, struct ath_txq *txq,
 
 	rcu_read_unlock();
 
-	if (needreset) {
-		spin_unlock_bh(&sc->sc_pcu_lock);
+	if (needreset)
 		ath_reset(sc, false);
-		spin_lock_bh(&sc->sc_pcu_lock);
+}
+
+static bool ath_lookup_legacy(struct ath_buf *bf)
+{
+	struct sk_buff *skb;
+	struct ieee80211_tx_info *tx_info;
+	struct ieee80211_tx_rate *rates;
+	int i;
+
+	skb = bf->bf_mpdu;
+	tx_info = IEEE80211_SKB_CB(skb);
+	rates = tx_info->control.rates;
+
+	for (i = 0; i < 4; i++) {
+		if (!rates[i].count || rates[i].idx < 0)
+			break;
+
+		if (!(rates[i].flags & IEEE80211_TX_RC_MCS))
+			return true;
 	}
+
+	return false;
 }
 
 static u32 ath_lookup_rate(struct ath_softc *sc, struct ath_buf *bf,
@@ -665,7 +684,8 @@ static int ath_compute_num_delims(struct ath_softc *sc, struct ath_atx_tid *tid,
 	 * TODO - this could be improved to be dependent on the rate.
 	 *      The hardware can keep up at lower rates, but not higher rates
 	 */
-	if (fi->keyix != ATH9K_TXKEYIX_INVALID)
+	if ((fi->keyix != ATH9K_TXKEYIX_INVALID) &&
+	    !(sc->sc_ah->caps.hw_caps & ATH9K_HW_CAP_EDMA))
 		ndelim += ATH_AGGR_ENCRYPTDELIM;
 
 	/*
@@ -742,7 +762,8 @@ static enum ATH_AGGR_STATUS ath_tx_form_aggr(struct ath_softc *sc,
 		al_delta = ATH_AGGR_DELIM_SZ + fi->framelen;
 
 		if (nframes &&
-		    (aggr_limit < (al + bpad + al_delta + prev_al))) {
+		    ((aggr_limit < (al + bpad + al_delta + prev_al)) ||
+		     ath_lookup_legacy(bf))) {
 			status = ATH_AGGR_LIMITED;
 			break;
 		}
@@ -1192,16 +1213,14 @@ bool ath_drain_all_txq(struct ath_softc *sc, bool retry_tx)
 	if (sc->sc_flags & SC_OP_INVALID)
 		return true;
 
-	/* Stop beacon queue */
-	ath9k_hw_stoptxdma(sc->sc_ah, sc->beacon.beaconq);
+	ath9k_hw_abort_tx_dma(ah);
 
-	/* Stop data queues */
+	/* Check if any queue remains active */
 	for (i = 0; i < ATH9K_NUM_TX_QUEUES; i++) {
-		if (ATH_TXQ_SETUP(sc, i)) {
-			txq = &sc->tx.txq[i];
-			ath9k_hw_stoptxdma(ah, txq->axq_qnum);
-			npend += ath9k_hw_numtxpending(ah, txq->axq_qnum);
-		}
+		if (!ATH_TXQ_SETUP(sc, i))
+			continue;
+
+		npend += ath9k_hw_numtxpending(ah, sc->tx.txq[i].axq_qnum);
 	}
 
 	if (npend)
@@ -2116,7 +2135,9 @@ static void ath_tx_complete_poll_work(struct work_struct *work)
 	if (needreset) {
 		ath_dbg(ath9k_hw_common(sc->sc_ah), ATH_DBG_RESET,
 			"tx hung, resetting the chip\n");
+		spin_lock_bh(&sc->sc_pcu_lock);
 		ath_reset(sc, true);
+		spin_unlock_bh(&sc->sc_pcu_lock);
 	}
 
 	ieee80211_queue_delayed_work(sc->hw, &sc->tx_complete_work,

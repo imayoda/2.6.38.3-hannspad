@@ -291,6 +291,21 @@ int ath_set_channel(struct ath_softc *sc, struct ieee80211_hw *hw,
 		ath_start_ani(common);
 	}
 
+	if (sc->ant_rx != 3) {
+		struct ath_hw_antcomb_conf div_ant_conf;
+		u8 lna_conf;
+
+		ath9k_hw_antdiv_comb_conf_get(ah, &div_ant_conf);
+		if (sc->ant_rx == 1)
+			lna_conf = ATH_ANT_DIV_COMB_LNA1;
+		else
+			lna_conf = ATH_ANT_DIV_COMB_LNA2;
+		div_ant_conf.main_lna_conf = lna_conf;
+		div_ant_conf.alt_lna_conf = lna_conf;
+
+		ath9k_hw_antdiv_comb_conf_set(ah, &div_ant_conf);
+	}
+
  ps_restore:
 	ieee80211_wake_queues(hw);
 
@@ -529,6 +544,7 @@ set_timer:
 	* The interval must be the shortest necessary to satisfy ANI,
 	* short calibration and long calibration.
 	*/
+	ath9k_debug_samp_bb_mac(sc);
 	cal_interval = ATH_LONG_CALINTERVAL;
 	if (sc->sc_ah->config.enable_ani)
 		cal_interval = min(cal_interval,
@@ -583,7 +599,9 @@ void ath_hw_check(struct work_struct *work)
 
 		msleep(1);
 	}
+	spin_lock_bh(&sc->sc_pcu_lock);
 	ath_reset(sc, true);
+	spin_unlock_bh(&sc->sc_pcu_lock);
 
 out:
 	ath9k_ps_restore(sc);
@@ -598,8 +616,11 @@ void ath9k_tasklet(unsigned long data)
 	u32 status = sc->intrstatus;
 	u32 rxmask;
 
-	if (status & ATH9K_INT_FATAL) {
+	if ((status & ATH9K_INT_FATAL) ||
+	    (status & ATH9K_INT_BB_WATCHDOG)) {
+		spin_lock(&sc->sc_pcu_lock);
 		ath_reset(sc, true);
+		spin_unlock(&sc->sc_pcu_lock);
 		return;
 	}
 
@@ -656,6 +677,7 @@ irqreturn_t ath_isr(int irq, void *dev)
 {
 #define SCHED_INTR (				\
 		ATH9K_INT_FATAL |		\
+		ATH9K_INT_BB_WATCHDOG |		\
 		ATH9K_INT_RXORN |		\
 		ATH9K_INT_RXEOL |		\
 		ATH9K_INT_RX |			\
@@ -968,11 +990,11 @@ int ath_reset(struct ath_softc *sc, bool retry_tx)
 	struct ieee80211_hw *hw = sc->hw;
 	int r;
 
+	ath9k_debug_samp_bb_mac(sc);
 	/* Stop ANI */
 	del_timer_sync(&common->ani.timer);
 
 	ath9k_ps_wakeup(sc);
-	spin_lock_bh(&sc->sc_pcu_lock);
 
 	ieee80211_stop_queues(hw);
 
@@ -1014,7 +1036,6 @@ int ath_reset(struct ath_softc *sc, bool retry_tx)
 	}
 
 	ieee80211_wake_queues(hw);
-	spin_unlock_bh(&sc->sc_pcu_lock);
 
 	/* Start ANI */
 	ath_start_ani(common);
@@ -2135,6 +2156,7 @@ static void ath9k_sw_scan_start(struct ieee80211_hw *hw)
 		return;
 	}
 
+	ath9k_debug_samp_bb_mac(sc);
 	aphy->state = ATH_WIPHY_SCAN;
 	ath9k_wiphy_pause_all_forced(sc, aphy);
 	mutex_unlock(&sc->mutex);
@@ -2149,6 +2171,7 @@ static void ath9k_sw_scan_complete(struct ieee80211_hw *hw)
 	struct ath_wiphy *aphy = hw->priv;
 	struct ath_softc *sc = aphy->sc;
 
+	ath9k_debug_samp_bb_mac(sc);
 	mutex_lock(&sc->mutex);
 	aphy->state = ATH_WIPHY_ACTIVE;
 	mutex_unlock(&sc->mutex);
@@ -2164,6 +2187,62 @@ static void ath9k_set_coverage_class(struct ieee80211_hw *hw, u8 coverage_class)
 	ah->coverage_class = coverage_class;
 	ath9k_hw_init_global_settings(ah);
 	mutex_unlock(&sc->mutex);
+}
+
+static u32 fill_chainmask(u32 cap, u32 new)
+{
+	u32 filled = 0;
+	int i;
+
+	for (i = 0; cap && new; i++, cap >>= 1) {
+		if (!(cap & BIT(0)))
+			continue;
+
+		if (new & BIT(0))
+			filled |= BIT(i);
+
+		new >>= 1;
+	}
+
+	return filled;
+}
+
+static int ath9k_set_antenna(struct ieee80211_hw *hw, u32 tx_ant, u32 rx_ant)
+{
+	struct ath_wiphy *aphy = hw->priv;
+	struct ath_softc *sc = aphy->sc;
+	struct ath_hw *ah = sc->sc_ah;
+
+	if (!rx_ant || !tx_ant)
+		return -EINVAL;
+
+	sc->ant_rx = rx_ant;
+	sc->ant_tx = tx_ant;
+
+	if (ah->caps.rx_chainmask == 1)
+		return 0;
+	/*
+	 * AR9100 runs into calibration issues if not all rx chains are enabled
+	 */
+	if (AR_SREV_9100(ah))
+		ah->rxchainmask = 0x7;
+	else
+		ah->rxchainmask = fill_chainmask(ah->caps.rx_chainmask, rx_ant);
+
+	ah->txchainmask = fill_chainmask(ah->caps.tx_chainmask, tx_ant);
+	ath9k_reload_chainmask_settings(sc);
+
+	return 0;
+}
+
+static int ath9k_get_antenna(struct ieee80211_hw *hw, u32 *tx_ant, u32 *rx_ant)
+{
+	struct ath_wiphy *aphy = hw->priv;
+	struct ath_softc *sc = aphy->sc;
+
+	*tx_ant = sc->ant_tx;
+	*rx_ant = sc->ant_rx;
+	return 0;
 }
 
 struct ieee80211_ops ath9k_ops = {
@@ -2189,4 +2268,6 @@ struct ieee80211_ops ath9k_ops = {
 	.sw_scan_complete   = ath9k_sw_scan_complete,
 	.rfkill_poll        = ath9k_rfkill_poll_state,
 	.set_coverage_class = ath9k_set_coverage_class,
+	.set_antenna        = ath9k_set_antenna,
+	.get_antenna        = ath9k_get_antenna,
 };

@@ -285,7 +285,7 @@ out_unlock:
  *	trouble so this is our best effort to reboot.  This is
  *	safe to call in interrupt context.
  */
-void __weak emergency_restart(void)	/* defer to kernel/preserved.c */
+void emergency_restart(void)
 {
 	kmsg_dump(KMSG_DUMP_EMERG);
 	machine_emergency_restart();
@@ -1677,6 +1677,18 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			break;
 		case PR_SET_SECCOMP:
 			error = prctl_set_seccomp(arg2);
+			break;
+		case PR_SET_SECCOMP_FILTER:
+			error = prctl_set_seccomp_filter(arg2, arg3,
+							 (char __user *) arg4);
+			break;
+		case PR_CLEAR_SECCOMP_FILTER:
+			error = prctl_clear_seccomp_filter(arg2, arg3);
+			break;
+		case PR_GET_SECCOMP_FILTER:
+			error = prctl_get_seccomp_filter(arg2, arg3,
+							 (char __user *) arg4,
+							 arg5);
 			break;
 		case PR_GET_TSC:
 			error = GET_TSC_CTL(arg2);

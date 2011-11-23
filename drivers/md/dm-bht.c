@@ -110,8 +110,19 @@ static int dm_bht_compute_hash(struct dm_bht *bht, struct page *pg,
 			smp_processor_id());
 		return -EINVAL;
 	}
-	if (crypto_hash_digest(hash_desc, &sg, PAGE_SIZE, digest)) {
-		DMCRIT("crypto_hash_digest failed");
+	if (crypto_hash_update(hash_desc, &sg, PAGE_SIZE)) {
+		DMCRIT("crypto_hash_update failed");
+		return -EINVAL;
+	}
+	if (bht->have_salt) {
+		sg_set_buf(&sg, bht->salt, sizeof(bht->salt));
+		if (crypto_hash_update(hash_desc, &sg, sizeof(bht->salt))) {
+			DMCRIT("crypto_hash_update failed");
+			return -EINVAL;
+		}
+	}
+	if (crypto_hash_final(hash_desc, digest)) {
+		DMCRIT("crypto_hash_final failed");
 		return -EINVAL;
 	}
 
@@ -119,13 +130,13 @@ static int dm_bht_compute_hash(struct dm_bht *bht, struct page *pg,
 }
 
 static __always_inline struct dm_bht_level *dm_bht_get_level(struct dm_bht *bht,
-							     unsigned int depth)
+							     int depth)
 {
 	return &bht->levels[depth];
 }
 
 static __always_inline unsigned int dm_bht_get_level_shift(struct dm_bht *bht,
-						  unsigned int depth)
+							   int depth)
 {
 	return (bht->depth - depth) * bht->node_count_shift;
 }
@@ -134,7 +145,7 @@ static __always_inline unsigned int dm_bht_get_level_shift(struct dm_bht *bht,
  * index for depth.
  */
 static __always_inline unsigned int dm_bht_index_at_level(struct dm_bht *bht,
-							  unsigned int depth,
+							  int depth,
 							  unsigned int leaf)
 {
 	return leaf >> dm_bht_get_level_shift(bht, depth);
@@ -148,10 +159,10 @@ static __always_inline u8 *dm_bht_node(struct dm_bht *bht,
 }
 
 static inline struct dm_bht_entry *dm_bht_get_entry(struct dm_bht *bht,
-						    unsigned int depth,
-						    unsigned int block_index)
+						    int depth,
+						    unsigned int block)
 {
-	unsigned int index = dm_bht_index_at_level(bht, depth, block_index);
+	unsigned int index = dm_bht_index_at_level(bht, depth, block);
 	struct dm_bht_level *level = dm_bht_get_level(bht, depth);
 
 	BUG_ON(index >= level->count);
@@ -161,10 +172,10 @@ static inline struct dm_bht_entry *dm_bht_get_entry(struct dm_bht *bht,
 
 static inline u8 *dm_bht_get_node(struct dm_bht *bht,
 				  struct dm_bht_entry *entry,
-				  unsigned int depth,
-				  unsigned int block_index)
+				  int depth,
+				  unsigned int block)
 {
-	unsigned int index = dm_bht_index_at_level(bht, depth, block_index);
+	unsigned int index = dm_bht_index_at_level(bht, depth, block);
 
 	return dm_bht_node(bht, entry, index % bht->node_count);
 }
@@ -201,15 +212,7 @@ int dm_bht_create(struct dm_bht *bht, unsigned int block_count,
 	int status = 0;
 	int cpu = 0;
 
-	/* Allocate enough crypto contexts to be able to perform verifies
-	 * on all available CPUs.
-	 */
-	bht->hash_desc = (struct hash_desc *)
-		kcalloc(nr_cpu_ids, sizeof(struct hash_desc), GFP_KERNEL);
-	if (!bht->hash_desc) {
-		DMERR("failed to allocate crypto hash contexts");
-		return -ENOMEM;
-	}
+	bht->have_salt = false;
 
 	/* Setup the hash first. Its length determines much of the bht layout */
 	for (cpu = 0; cpu < nr_cpu_ids; ++cpu) {
@@ -233,13 +236,6 @@ int dm_bht_create(struct dm_bht *bht, unsigned int block_count,
 		DMERR("DM_BHT_MAX_DIGEST_SIZE too small for chosen digest");
 		status = -EINVAL;
 		goto bad_digest_len;
-	}
-
-	bht->root_digest = (u8 *) kzalloc(bht->digest_size, GFP_KERNEL);
-	if (!bht->root_digest) {
-		DMERR("failed to allocate memory for root digest");
-		status = -ENOMEM;
-		goto bad_root_digest_alloc;
 	}
 
 	/* Configure the tree */
@@ -269,7 +265,7 @@ int dm_bht_create(struct dm_bht *bht, unsigned int block_count,
 	}
 
 	bht->depth = DIV_ROUND_UP(fls(block_count - 1), bht->node_count_shift);
-	DMDEBUG("Setting depth to %u.", bht->depth);
+	DMDEBUG("Setting depth to %d.", bht->depth);
 
 	/* Ensure that we can safely shift by this value. */
 	if (bht->depth * bht->node_count_shift >= sizeof(unsigned int) * 8) {
@@ -312,14 +308,11 @@ bad_entries_alloc:
 bad_node_count:
 bad_level_alloc:
 bad_block_count:
-	kfree(bht->root_digest);
-bad_root_digest_alloc:
 bad_digest_len:
+bad_hash_alg:
 	for (cpu = 0; cpu < nr_cpu_ids; ++cpu)
 		if (bht->hash_desc[cpu].tfm)
 			crypto_free_hash(bht->hash_desc[cpu].tfm);
-bad_hash_alg:
-	kfree(bht->hash_desc);
 	return status;
 }
 EXPORT_SYMBOL(dm_bht_create);
@@ -342,7 +335,7 @@ static int dm_bht_initialize_entries(struct dm_bht *bht)
 	unsigned int last_index = ALIGN(bht->block_count, bht->node_count) - 1;
 	unsigned int total_entries = 0;
 	struct dm_bht_level *level = NULL;
-	unsigned int depth;
+	int depth;
 
 	/* check that the largest level->count can't result in an int overflow
 	 * on allocation or sector calculation.
@@ -363,7 +356,7 @@ static int dm_bht_initialize_entries(struct dm_bht *bht)
 		level = dm_bht_get_level(bht, depth);
 		level->count = dm_bht_index_at_level(bht, depth,
 						     last_index) + 1;
-		DMDEBUG("depth: %u entries: %u", depth, level->count);
+		DMDEBUG("depth: %d entries: %u", depth, level->count);
 		/* TODO(wad) consider the case where the data stored for each
 		 * level is done with contiguous pages (instead of using
 		 * entry->nodes) and the level just contains two bitmaps:
@@ -375,7 +368,7 @@ static int dm_bht_initialize_entries(struct dm_bht *bht)
 					 sizeof(struct dm_bht_entry),
 					 GFP_KERNEL);
 		if (!level->entries) {
-			DMERR("failed to allocate entries for depth %u",
+			DMERR("failed to allocate entries for depth %d",
 			      bht->depth);
 			/* let the caller clean up the mess */
 			return -ENOMEM;
@@ -389,16 +382,6 @@ static int dm_bht_initialize_entries(struct dm_bht *bht)
 			DMCRIT("level sector calculation overflowed");
 			return -EINVAL;
 		}
-	}
-
-	/* Go ahead and reserve enough space for everything.  We really don't
-	 * want memory allocation failures.  Once we start freeing verified
-	 * entries, then we can reduce this reservation.
-	 */
-	bht->entry_pool = mempool_create_page_pool(total_entries, 0);
-	if (!bht->entry_pool) {
-		DMERR("failed to allocate mempool");
-		return -ENOMEM;
 	}
 
 	return 0;
@@ -462,10 +445,10 @@ EXPORT_SYMBOL(dm_bht_write_completed);
 /* dm_bht_verify_path
  * Verifies the path. Returns 0 on ok.
  */
-static int dm_bht_verify_path(struct dm_bht *bht, unsigned int block_index,
+static int dm_bht_verify_path(struct dm_bht *bht, unsigned int block,
 			      struct page *pg, unsigned int offset)
 {
-	unsigned int depth = bht->depth;
+	int depth = bht->depth;
 	u8 digest[DM_BHT_MAX_DIGEST_SIZE];
 	struct dm_bht_entry *entry;
 	u8 *node;
@@ -475,13 +458,13 @@ static int dm_bht_verify_path(struct dm_bht *bht, unsigned int block_index,
 		/* Need to check that the hash of the current block is accurate
 		 * in its parent.
 		 */
-		entry = dm_bht_get_entry(bht, depth - 1, block_index);
+		entry = dm_bht_get_entry(bht, depth - 1, block);
 		state = atomic_read(&entry->state);
 		/* This call is only safe if all nodes along the path
 		 * are already populated (i.e. READY) via dm_bht_populate.
 		 */
 		BUG_ON(state < DM_BHT_ENTRY_READY);
-		node = dm_bht_get_node(bht, entry, depth, block_index);
+		node = dm_bht_get_node(bht, entry, depth, block);
 
 		if (dm_bht_compute_hash(bht, pg, offset, digest) ||
 		    memcmp(digest, node, bht->digest_size))
@@ -503,19 +486,19 @@ static int dm_bht_verify_path(struct dm_bht *bht, unsigned int block_index,
 
 	/* Mark path to leaf as verified. */
 	for (depth++; depth < bht->depth; depth++) {
-		entry = dm_bht_get_entry(bht, depth, block_index);
+		entry = dm_bht_get_entry(bht, depth, block);
 		/* At this point, entry can only be in VERIFIED or READY state.
 		 * So it is safe to use atomic_set instead of atomic_cmpxchg.
 		 */
 		atomic_set(&entry->state, DM_BHT_ENTRY_VERIFIED);
 	}
 
-	DMDEBUG("verify_path: node %u is verified to root", block_index);
+	DMDEBUG("verify_path: node %u is verified to root", block);
 	return 0;
 
 mismatch:
-	DMERR_LIMIT("verify_path: failed to verify hash (d=%u,bi=%u)",
-		    depth, block_index);
+	DMERR_LIMIT("verify_path: failed to verify hash (d=%d,bi=%u)",
+		    depth, block);
 	dm_bht_log_mismatch(bht, node, digest);
 	return DM_BHT_ENTRY_ERROR_MISMATCH;
 }
@@ -523,7 +506,7 @@ mismatch:
 /**
  * dm_bht_store_block - sets a given block's hash in the tree
  * @bht:	pointer to a dm_bht_create()d bht
- * @block_index:numeric index of the block in the tree
+ * @block:	numeric index of the block in the tree
  * @digest:	array of u8s containing the digest of length @bht->digest_size
  *
  * Returns 0 on success, >0 when data is pending, and <0 when a IO or other
@@ -537,7 +520,7 @@ mismatch:
  *
  * It is expected that virt_to_page will work on |block_data|.
  */
-int dm_bht_store_block(struct dm_bht *bht, unsigned int block_index,
+int dm_bht_store_block(struct dm_bht *bht, unsigned int block,
 		       u8 *block_data)
 {
 	int depth;
@@ -553,16 +536,16 @@ int dm_bht_store_block(struct dm_bht *bht, unsigned int block_index,
 
 	/* Index into the level */
 	level = dm_bht_get_level(bht, depth);
-	index = dm_bht_index_at_level(bht, depth, block_index);
+	index = dm_bht_index_at_level(bht, depth, block);
 	/* Grab the node index into the current entry by getting the
 	 * index at the leaf-level.
 	 */
-	node_index = dm_bht_index_at_level(bht, depth + 1, block_index) %
+	node_index = dm_bht_index_at_level(bht, depth + 1, block) %
 		     bht->node_count;
 	entry = &level->entries[index];
 
 	DMDEBUG("Storing block %u in d=%d,ei=%u,ni=%u,s=%d",
-		block_index, depth, index, node_index,
+		block, depth, index, node_index,
 		atomic_read(&entry->state));
 
 	state = atomic_cmpxchg(&entry->state,
@@ -573,8 +556,7 @@ int dm_bht_store_block(struct dm_bht *bht, unsigned int block_index,
 	 *     The number of updated entries is NOT tracked.
 	 */
 	if (state == DM_BHT_ENTRY_UNALLOCATED) {
-		node_page = (struct page *) mempool_alloc(bht->entry_pool,
-							  GFP_KERNEL);
+		node_page = alloc_page(GFP_KERNEL);
 		if (!node_page) {
 			atomic_set(&entry->state, DM_BHT_ENTRY_ERROR);
 			return -ENOMEM;
@@ -587,10 +569,10 @@ int dm_bht_store_block(struct dm_bht *bht, unsigned int block_index,
 		atomic_set(&entry->state, DM_BHT_ENTRY_READY);
 	} else if (state <= DM_BHT_ENTRY_ERROR) {
 		DMCRIT("leaf entry for block %u is invalid",
-		      block_index);
+		      block);
 		return state;
 	} else if (state == DM_BHT_ENTRY_PENDING) {
-		DMERR("leaf data is pending for block %u", block_index);
+		DMERR("leaf data is pending for block %u", block);
 		return 1;
 	}
 
@@ -654,14 +636,14 @@ int dm_bht_compute(struct dm_bht *bht, void *read_cb_ctx)
 			unsigned int count = bht->node_count;
 			struct page *pg;
 
-			pg = (struct page *) mempool_alloc(bht->entry_pool,
-							   GFP_NOIO);
+			pg = alloc_page(GFP_NOIO);
 			if (!pg) {
 				DMCRIT("an error occurred while reading entry");
 				goto out;
 			}
 
 			entry->nodes = page_address(pg);
+			memset(entry->nodes, 0, PAGE_SIZE);
 			atomic_set(&entry->state, DM_BHT_ENTRY_READY);
 
 			if (i == (level->count - 1))
@@ -674,7 +656,7 @@ int dm_bht_compute(struct dm_bht *bht, void *read_cb_ctx)
 
 				r = dm_bht_compute_hash(bht, pg, 0, digest);
 				if (r) {
-					DMERR("Failed to update (d=%u,i=%u)",
+					DMERR("Failed to update (d=%d,i=%u)",
 					      depth, i);
 					goto out;
 				}
@@ -702,7 +684,7 @@ EXPORT_SYMBOL(dm_bht_compute);
  */
 int dm_bht_sync(struct dm_bht *bht, void *write_cb_ctx)
 {
-	unsigned int depth;
+	int depth;
 	int ret = 0;
 	int state;
 	sector_t sector;
@@ -744,19 +726,18 @@ EXPORT_SYMBOL(dm_bht_sync);
  * dm_bht_is_populated - check that entries from disk needed to verify a given
  *                       block are all ready
  * @bht:	pointer to a dm_bht_create()d bht
- * @block_index:specific block data is expected from
+ * @block:	specific block data is expected from
  *
  * Callers may wish to call dm_bht_is_populated() when checking an io
  * for which entries were already pending.
  */
-bool dm_bht_is_populated(struct dm_bht *bht, unsigned int block_index)
+bool dm_bht_is_populated(struct dm_bht *bht, unsigned int block)
 {
-	unsigned int depth;
+	int depth;
 
-	/* TODO(msb) convert depth to int and avoid ugly cast */
-	for (depth = bht->depth - 1; (int)depth >= 0; depth--) {
+	for (depth = bht->depth - 1; depth >= 0; depth--) {
 		struct dm_bht_entry *entry = dm_bht_get_entry(bht, depth,
-							      block_index);
+							      block);
 		if (atomic_read(&entry->state) < DM_BHT_ENTRY_READY)
 			return false;
 	}
@@ -769,39 +750,40 @@ EXPORT_SYMBOL(dm_bht_is_populated);
  * dm_bht_populate - reads entries from disk needed to verify a given block
  * @bht:	pointer to a dm_bht_create()d bht
  * @ctx:        context used for all read_cb calls on this request
- * @block_index:specific block data is expected from
+ * @block:	specific block data is expected from
  *
  * Returns negative value on error. Returns 0 on success.
  */
 int dm_bht_populate(struct dm_bht *bht, void *ctx,
-		    unsigned int block_index)
+		    unsigned int block)
 {
-	unsigned int depth;
+	int depth;
 	int state = 0;
 
-	BUG_ON(block_index >= bht->block_count);
+	BUG_ON(block >= bht->block_count);
 
-	DMDEBUG("dm_bht_populate(%u)", block_index);
+	DMDEBUG("dm_bht_populate(%u)", block);
 
-	for (depth = 0; depth < bht->depth; ++depth) {
+	for (depth = bht->depth - 1; depth >= 0; --depth) {
 		struct dm_bht_level *level;
 		struct dm_bht_entry *entry;
 		unsigned int index;
 		struct page *pg;
 
-		entry = dm_bht_get_entry(bht, depth, block_index);
+		entry = dm_bht_get_entry(bht, depth, block);
 		state = atomic_cmpxchg(&entry->state,
 				       DM_BHT_ENTRY_UNALLOCATED,
 				       DM_BHT_ENTRY_PENDING);
 
+		if (state == DM_BHT_ENTRY_VERIFIED)
+			break;
 		if (state <= DM_BHT_ENTRY_ERROR)
 			goto error_state;
-
 		if (state != DM_BHT_ENTRY_UNALLOCATED)
 			continue;
 
 		/* Current entry is claimed for allocation and loading */
-		pg = (struct page *) mempool_alloc(bht->entry_pool, GFP_NOIO);
+		pg = alloc_page(GFP_NOIO);
 		if (!pg)
 			goto nomem;
 
@@ -811,7 +793,7 @@ int dm_bht_populate(struct dm_bht *bht, void *ctx,
 		/* TODO(wad) error check callback here too */
 
 		level = &bht->levels[depth];
-		index = dm_bht_index_at_level(bht, depth, block_index);
+		index = dm_bht_index_at_level(bht, depth, block);
 		bht->read_cb(ctx, level->sector + to_sector(index * PAGE_SIZE),
 			     entry->nodes, to_sector(PAGE_SIZE), entry);
 	}
@@ -819,11 +801,11 @@ int dm_bht_populate(struct dm_bht *bht, void *ctx,
 	return 0;
 
 error_state:
-	DMCRIT("block %u at depth %u is in an error state", block_index, depth);
+	DMCRIT("block %u at depth %d is in an error state", block, depth);
 	return state;
 
 nomem:
-	DMCRIT("failed to allocate memory for entry->nodes from pool");
+	DMCRIT("failed to allocate memory for entry->nodes");
 	return -ENOMEM;
 }
 EXPORT_SYMBOL(dm_bht_populate);
@@ -832,20 +814,20 @@ EXPORT_SYMBOL(dm_bht_populate);
 /**
  * dm_bht_verify_block - checks that all nodes in the path for @block are valid
  * @bht:	pointer to a dm_bht_create()d bht
- * @block_index:specific block data is expected from
- * @block:	virtual address of the block data in memory
- *              (must be aligned to block size)
+ * @block:	specific block data is expected from
+ * @pg:		page holding the block data
+ * @offset:	offset into the page
  *
  * Returns 0 on success, 1 on missing data, and a negative error
  * code on verification failure. All supporting functions called
  * should return similarly.
  */
-int dm_bht_verify_block(struct dm_bht *bht, unsigned int block_index,
+int dm_bht_verify_block(struct dm_bht *bht, unsigned int block,
 			struct page *pg, unsigned int offset)
 {
 	BUG_ON(offset != 0);
 
-	return  dm_bht_verify_path(bht, block_index, pg, offset);
+	return  dm_bht_verify_path(bht, block, pg, offset);
 }
 EXPORT_SYMBOL(dm_bht_verify_block);
 
@@ -857,10 +839,8 @@ EXPORT_SYMBOL(dm_bht_verify_block);
  */
 int dm_bht_destroy(struct dm_bht *bht)
 {
-	unsigned int depth;
+	int depth;
 	int cpu = 0;
-
-	kfree(bht->root_digest);
 
 	depth = bht->depth;
 	while (depth-- != 0) {
@@ -880,20 +860,17 @@ int dm_bht_destroy(struct dm_bht *bht)
 				continue;
 			default:
 				BUG_ON(!entry->nodes);
-				mempool_free(virt_to_page(entry->nodes),
-					     bht->entry_pool);
+				__free_page(virt_to_page(entry->nodes));
 				break;
 			}
 		}
 		kfree(bht->levels[depth].entries);
 		bht->levels[depth].entries = NULL;
 	}
-	mempool_destroy(bht->entry_pool);
 	kfree(bht->levels);
 	for (cpu = 0; cpu < nr_cpu_ids; ++cpu)
 		if (bht->hash_desc[cpu].tfm)
 			crypto_free_hash(bht->hash_desc[cpu].tfm);
-	kfree(bht->hash_desc);
 	return 0;
 }
 EXPORT_SYMBOL(dm_bht_destroy);
@@ -942,10 +919,6 @@ EXPORT_SYMBOL(dm_bht_set_write_cb);
  */
 int dm_bht_set_root_hexdigest(struct dm_bht *bht, const u8 *hexdigest)
 {
-	if (!bht->root_digest) {
-		DMCRIT("No allocation for root digest. Call dm_bht_create");
-		return -1;
-	}
 	/* Make sure we have at least the bytes expected */
 	if (strnlen((char *)hexdigest, bht->digest_size * 2) !=
 	    bht->digest_size * 2) {
@@ -974,13 +947,34 @@ int dm_bht_root_hexdigest(struct dm_bht *bht, u8 *hexdigest, int available)
 		DMERR("hexdigest has too few bytes available");
 		return -EINVAL;
 	}
-	if (!bht->root_digest) {
-		DMERR("no root digest exists to export");
-		if (available > 0)
-			*hexdigest = 0;
-		return -1;
-	}
 	dm_bht_bin_to_hex(bht->root_digest, hexdigest, bht->digest_size);
 	return 0;
 }
 EXPORT_SYMBOL(dm_bht_root_hexdigest);
+
+/**
+ * dm_bht_set_salt - sets the salt used, in hex
+ * @bht:      pointer to a dm_bht_create()d bht
+ * @hexsalt:  salt string, as hex; will be zero-padded or truncated to
+ *            DM_BHT_SALT_SIZE * 2 hex digits.
+ */
+void dm_bht_set_salt(struct dm_bht *bht, const char *hexsalt)
+{
+	size_t saltlen = min(strlen(hexsalt) / 2, sizeof(bht->salt));
+	bht->have_salt = true;
+	memset(bht->salt, 0, sizeof(bht->salt));
+	dm_bht_hex_to_bin(bht->salt, (const u8 *)hexsalt, saltlen);
+}
+
+/**
+ * dm_bht_salt - returns the salt used, in hex
+ * @bht:      pointer to a dm_bht_create()d bht
+ * @hexsalt:  buffer to put salt into, of length DM_BHT_SALT_SIZE * 2 + 1.
+ */
+int dm_bht_salt(struct dm_bht *bht, char *hexsalt)
+{
+	if (!bht->have_salt)
+		return -EINVAL;
+	dm_bht_bin_to_hex(bht->salt, (u8 *)hexsalt, sizeof(bht->salt));
+	return 0;
+}

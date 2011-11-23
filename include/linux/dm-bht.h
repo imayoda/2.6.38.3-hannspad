@@ -11,13 +11,13 @@
 
 #include <linux/compiler.h>
 #include <linux/crypto.h>
-#include <linux/mempool.h>
 #include <linux/types.h>
 
 /* To avoid allocating memory for digest tests, we just setup a
  * max to use for now.
  */
 #define DM_BHT_MAX_DIGEST_SIZE 128  /* 1k hashes are unlikely for now */
+#define DM_BHT_SALT_SIZE       32   /* 256 bits of salt is a lot */
 
 /* UNALLOCATED, PENDING, READY, and VERIFIED are valid states. All other
  * values are entry-related return codes.
@@ -82,23 +82,27 @@ typedef int(*dm_bht_callback)(void *,  /* external context */
  */
 struct dm_bht {
 	/* Configured values */
-	/* ENFORCE: depth must be >= 2. */
-	unsigned int depth;  /* Depth of the tree including the root */
+	int depth;  /* Depth of the tree including the root */
 	unsigned int block_count;  /* Number of blocks hashed */
 	char hash_alg[CRYPTO_MAX_ALG_NAME];
+	unsigned char salt[DM_BHT_SALT_SIZE];
+
+	/* This is a temporary hack to ease the transition to salting. It will
+	 * be removed once salting is supported both in kernel and userspace,
+	 * and the salt will default to all zeroes instead. */
+	bool have_salt;
 
 	/* Computed values */
 	unsigned int node_count;  /* Data size (in hashes) for each entry */
 	unsigned int node_count_shift;  /* first bit set - 1 */
 	/* There is one per CPU so that verified can be simultaneous. */
-	struct hash_desc *hash_desc;  /* Container for the hash alg */
+	struct hash_desc hash_desc[NR_CPUS];  /* Container for the hash alg */
 	unsigned int digest_size;
 	sector_t sectors;  /* Number of disk sectors used */
 
 	/* bool verified;  Full tree is verified */
-	u8 *root_digest;  /* hash_alg(levels[0].entries[*].nodes) */
+	u8 root_digest[DM_BHT_MAX_DIGEST_SIZE];
 	struct dm_bht_level *levels;  /* in reverse order */
-	mempool_t *entry_pool;
 	/* Callbacks for reading and/or writing to the hash device */
 	dm_bht_callback read_cb;
 	dm_bht_callback write_cb;
@@ -117,12 +121,14 @@ void dm_bht_set_read_cb(struct dm_bht *bht, dm_bht_callback read_cb);
 void dm_bht_set_write_cb(struct dm_bht *bht, dm_bht_callback write_cb);
 int dm_bht_set_root_hexdigest(struct dm_bht *bht, const u8 *hexdigest);
 int dm_bht_root_hexdigest(struct dm_bht *bht, u8 *hexdigest, int available);
+void dm_bht_set_salt(struct dm_bht *bht, const char *hexsalt);
+int dm_bht_salt(struct dm_bht *bht, char *hexsalt);
 
 /* Functions for loading in data from disk for verification */
-bool dm_bht_is_populated(struct dm_bht *bht, unsigned int block_index);
+bool dm_bht_is_populated(struct dm_bht *bht, unsigned int block);
 int dm_bht_populate(struct dm_bht *bht, void *read_cb_ctx,
-		    unsigned int block_index);
-int dm_bht_verify_block(struct dm_bht *bht, unsigned int block_index,
+		    unsigned int block);
+int dm_bht_verify_block(struct dm_bht *bht, unsigned int block,
 			struct page *pg, unsigned int offset);
 
 /* Functions for creating struct dm_bhts on disk.  A newly created dm_bht
@@ -131,7 +137,7 @@ int dm_bht_verify_block(struct dm_bht *bht, unsigned int block_index,
  */
 int dm_bht_compute(struct dm_bht *bht, void *read_cb_ctx);
 int dm_bht_sync(struct dm_bht *bht, void *write_cb_ctx);
-int dm_bht_store_block(struct dm_bht *bht, unsigned int block_index,
+int dm_bht_store_block(struct dm_bht *bht, unsigned int block,
 		       u8 *block_data);
 int dm_bht_zeroread_callback(void *ctx, sector_t start, u8 *dst, sector_t count,
 			     struct dm_bht_entry *entry);

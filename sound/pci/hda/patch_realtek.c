@@ -22,7 +22,6 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  */
-
 #include <linux/init.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
@@ -1129,7 +1128,6 @@ static void alc_automute_speaker(struct hda_codec *codec, int pinctl)
 	unsigned int mute;
 	hda_nid_t nid;
 	int i;
-	unsigned int hdmi_present = 0;
 
 	spec->jack_present = 0;
 	for (i = 0; i < ARRAY_SIZE(spec->autocfg.hp_pins); i++) {
@@ -1143,13 +1141,11 @@ static void alc_automute_speaker(struct hda_codec *codec, int pinctl)
 	mute = spec->jack_present ? HDA_AMP_MUTE : 0;
 	/* Toggle internal speakers muting */
 
+	nid = spec->autocfg.hp_pins[0];
 	if (!nid)
 		return;
 	spec->jack_present = snd_hda_jack_detect(codec, nid);
 	if (codec->subsystem_id == 0x1025047c) {
-		hdmi_present = snd_hda_codec_read(codec, 0x1e, 0,
-						  AC_VERB_GET_PIN_SENSE, 0);
-		hdmi_present = (hdmi_present & AC_PINSENSE_PRESENCE) ? 1 : 0;
 		snd_hda_codec_write(codec, spec->multiout.dig_out_nid, 0,
 				    AC_VERB_SET_DIGI_CONVERT_1,
 				    spec->jack_present ? 0 : 1);
@@ -1162,7 +1158,7 @@ static void alc_automute_speaker(struct hda_codec *codec, int pinctl)
 		if (pinctl) {
 			snd_hda_codec_write(codec, nid, 0,
 				    AC_VERB_SET_PIN_WIDGET_CONTROL,
-				    (spec->jack_present | hdmi_present) ? 
+				    (spec->jack_present) ?
 				    0 : PIN_OUT);
 		} else {
 			snd_hda_codec_amp_stereo(codec, nid, HDA_OUTPUT, 0,
@@ -1345,11 +1341,9 @@ static void alc_auto_init_amp(struct hda_codec *codec, int type)
 			set_eapd(codec, 0x10, 1);
 			break;
 		case 0x10ec0272:
-			/* delay de-assert of eapd to allow biasing of amp
-			   inputs to settle avoiding an audible 'pop'
-			 */
+			/* eapd on here creates audible pop for alex system */
 			if (codec->subsystem_id == 0x144dc0a7)
-				msleep(25);
+				break;
 			/* fall through */
 		case 0x10ec0262:
 		case 0x10ec0267:
@@ -14300,6 +14294,8 @@ static struct snd_kcontrol_new alc269vb_laptop_mixer[] = {
 static struct snd_kcontrol_new alc269_asus_mixer[] = {
 	HDA_CODEC_VOLUME("Master Playback Volume", 0x02, 0x0, HDA_OUTPUT),
 	HDA_CODEC_MUTE("Master Playback Switch", 0x0c, 0x0, HDA_INPUT),
+	HDA_CODEC_MUTE("Speaker Playback Switch", 0x14, 0x0, HDA_OUTPUT),
+	HDA_CODEC_MUTE("Headphone Playback Switch", 0x21, 0x0, HDA_OUTPUT),
 	{ } /* end */
 };
 
@@ -18015,11 +18011,6 @@ static struct hda_verb alc662_init_verbs[] = {
 	/* Input mixer */
 	{0x22, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
 	{0x23, AC_VERB_SET_AMP_GAIN_MUTE, AMP_IN_UNMUTE(0)},
-
-	/* always trun on EAPD */
-	{0x14, AC_VERB_SET_EAPD_BTLENABLE, 2},
-	{0x15, AC_VERB_SET_EAPD_BTLENABLE, 2},
-
 	{ }
 };
 
@@ -18246,6 +18237,8 @@ static struct hda_verb alc663_mode8_init_verbs[] = {
 };
 
 static struct hda_verb alc272_mario_init_verbs[] = {
+	{0x14, AC_VERB_SET_EAPD_BTLENABLE, 2},
+	{0x15, AC_VERB_SET_EAPD_BTLENABLE, 2},
 	{0x12, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_IN},
 	{0x21, AC_VERB_SET_PIN_WIDGET_CONTROL, PIN_HP},
 	{0x21, AC_VERB_SET_AMP_GAIN_MUTE, AMP_OUT_UNMUTE},
@@ -18801,7 +18794,7 @@ static struct snd_kcontrol_new alc272_mario_mixer[] = {
 
 	HDA_CODEC_VOLUME("Mic Playback Volume", 0x0b, 0x0, HDA_INPUT),
 	HDA_CODEC_MUTE("Mic Playback Switch", 0x0b, 0x0, HDA_INPUT),
-	HDA_CODEC_VOLUME("Mic Boost", 0x18, 0, HDA_INPUT),
+	HDA_CODEC_VOLUME("Mic Boost Volume", 0x18, 0, HDA_INPUT),
 	{ } /* end */
 };
 
@@ -19597,11 +19590,61 @@ static void alc272_fixup_mario(struct hda_codec *codec,
 		       "hda_codec: failed to override amp caps for NID 0x2\n");
 }
 
+#ifdef CONFIG_SND_HDA_POWER_SAVE
+static int alc272_alex_suspend(struct hda_codec *codec, pm_message_t state)
+{
+	struct alc_spec *spec = codec->spec;
+
+	set_eapd(codec, 0x14, 0);
+	msleep(300);
+
+	alc_shutup(codec);
+	if (spec && spec->power_hook)
+		spec->power_hook(codec);
+	snd_printdd("hda_codec: alex suspend completed\n");
+	return 0;
+}
+#endif /* CONFIG_SND_HDA_POWER_SAVE */
+#ifdef SND_HDA_NEEDS_RESUME
+static int alc272_alex_resume(struct hda_codec *codec)
+{
+	codec->patch_ops.init(codec);
+	snd_hda_codec_resume_amp(codec);
+	snd_hda_codec_resume_cache(codec);
+	if (codec->patch_ops.check_power_status)
+		codec->patch_ops.check_power_status(codec, 0x01);
+
+	msleep(25);
+	set_eapd(codec, 0x14, 1);
+	snd_printdd("hda_codec: alex resume completed\n");
+	return 0;
+}
+#endif /* SND_HDA_NEEDS_RESUME */
+
+static void alc272_fixup_alex(struct hda_codec *codec,
+			       const struct alc_fixup *fix, int pre_init) {
+	if (snd_hda_override_amp_caps(codec, 0x2, HDA_OUTPUT,
+				      (0x3c << AC_AMPCAP_OFFSET_SHIFT) |
+				      (0x3c << AC_AMPCAP_NUM_STEPS_SHIFT) |
+				      (0x03 << AC_AMPCAP_STEP_SIZE_SHIFT) |
+				      (0 << AC_AMPCAP_MUTE_SHIFT)))
+		printk(KERN_WARNING
+		       "hda_codec: failed to override amp caps for NID 0x2\n");
+	set_eapd(codec, 0x14, 1);
+#ifdef CONFIG_SND_HDA_POWER_SAVE
+	codec->patch_ops.suspend = alc272_alex_suspend;
+#endif
+#ifdef SND_HDA_NEEDS_RESUME
+	codec->patch_ops.resume = alc272_alex_resume;
+#endif
+}
+
 enum {
 	ALC662_FIXUP_ASPIRE,
 	ALC662_FIXUP_IDEAPAD,
 	ALC272_FIXUP_MARIO,
 	ALC662_FIXUP_CZC_P10T,
+	ALC272_FIXUP_ALEX,
 };
 
 static const struct alc_fixup alc662_fixups[] = {
@@ -19630,6 +19673,10 @@ static const struct alc_fixup alc662_fixups[] = {
 			{}
 		}
 	},
+	[ALC272_FIXUP_ALEX] = {
+		.type = ALC_FIXUP_FUNC,
+		.v.func = alc272_fixup_alex,
+	}
 };
 
 static struct snd_pci_quirk alc662_fixup_tbl[] = {
@@ -19644,6 +19691,7 @@ static struct snd_pci_quirk alc662_fixup_tbl[] = {
 
 static const struct alc_model_fixup alc662_fixup_models[] = {
 	{.id = ALC272_FIXUP_MARIO, .name = "mario"},
+	{.id = ALC272_FIXUP_ALEX, .name = "alex"},
 	{}
 };
 

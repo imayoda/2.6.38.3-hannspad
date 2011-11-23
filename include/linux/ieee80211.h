@@ -884,6 +884,15 @@ struct ieee80211_ht_cap {
 #define IEEE80211_HT_CAP_40MHZ_INTOLERANT	0x4000
 #define IEEE80211_HT_CAP_LSIG_TXOP_PROT		0x8000
 
+/* 802.11n HT extended capabilities masks (for extended_ht_cap_info) */
+#define IEEE80211_HT_EXT_CAP_PCO		0x0001
+#define IEEE80211_HT_EXT_CAP_PCO_TIME		0x0006
+#define		IEEE80211_HT_EXT_CAP_PCO_TIME_SHIFT	1
+#define IEEE80211_HT_EXT_CAP_MCS_FB		0x0300
+#define		IEEE80211_HT_EXT_CAP_MCS_FB_SHIFT	8
+#define IEEE80211_HT_EXT_CAP_HTC_SUP		0x0400
+#define IEEE80211_HT_EXT_CAP_RD_RESPONDER	0x0800
+
 /* 802.11n HT capability AMPDU settings (for ampdu_params_info) */
 #define IEEE80211_HT_AMPDU_PARM_FACTOR		0x03
 #define IEEE80211_HT_AMPDU_PARM_DENSITY		0x1C
@@ -1325,6 +1334,9 @@ enum {
 /* Although the spec says 8 I'm seeing 6 in practice */
 #define IEEE80211_COUNTRY_IE_MIN_LEN	6
 
+/* The Country String field of the element shall be 3 octets in length */
+#define IEEE80211_COUNTRY_STRING_LEN	3
+
 /*
  * For regulatory extension stuff see IEEE 802.11-2007
  * Annex I (page 1141) and Annex J (page 1147). Also
@@ -1424,6 +1436,43 @@ enum ieee80211_sa_query_action {
 #define WLAN_MAX_KEY_LEN		32
 
 #define WLAN_PMKID_LEN			16
+
+/*
+ * WMM/802.11e Tspec Element
+ */
+#define IEEE80211_WMM_IE_TSPEC_TID_MASK		0x0F
+#define IEEE80211_WMM_IE_TSPEC_TID_SHIFT	1
+
+enum ieee80211_tspec_status_code {
+	IEEE80211_TSPEC_STATUS_ADMISS_ACCEPTED = 0,
+	IEEE80211_TSPEC_STATUS_ADDTS_INVAL_PARAMS = 0x1,
+};
+
+struct ieee80211_tspec_ie {
+	u8 element_id;
+	u8 len;
+	u8 oui[3];
+	u8 oui_type;
+	u8 oui_subtype;
+	u8 version;
+	__le16 tsinfo;
+	u8 tsinfo_resvd;
+	__le16 nominal_msdu;
+	__le16 max_msdu;
+	__le32 min_service_int;
+	__le32 max_service_int;
+	__le32 inactivity_int;
+	__le32 suspension_int;
+	__le32 service_start_time;
+	__le32 min_data_rate;
+	__le32 mean_data_rate;
+	__le32 peak_data_rate;
+	__le32 max_burst_size;
+	__le32 delay_bound;
+	__le32 min_phy_rate;
+	__le16 sba;
+	__le16 medium_time;
+} __packed;
 
 /**
  * ieee80211_get_qos_ctl - get pointer to qos control bytes
