@@ -975,7 +975,6 @@ static unsigned int gcd(unsigned int u, unsigned int v)
 static int alc5623_set_dai_pll(struct snd_soc_dai *codec_dai, int pll_id,
 		int source, unsigned int freq_in, unsigned int freq_out)
 {
-	int i;
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct alc5623 *alc5623 = snd_soc_codec_get_drvdata(codec);
 	unsigned int rin, rout, cd, m, finkhz, msel, ksel, psel, fvcodifsel;
@@ -1613,9 +1612,7 @@ struct snd_soc_dai alc5623_dai = {
         .symmetric_rates = 1,
 };
 
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,36)
 EXPORT_SYMBOL_GPL(alc5623_dai);
-#endif
 
 /* Check if a register is volatile or not to forbid or not caching its value */
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)

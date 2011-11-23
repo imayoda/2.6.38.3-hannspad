@@ -13,6 +13,15 @@ obj-y                                   += pinmux.o
 obj-y                                   += powergate.o
 obj-y					+= fuse.o
 obj-y					+= kfuse.o
+ifeq ($(CONFIG_SND_TEGRA_SOC),y)
+obj-$(CONFIG_ARCH_TEGRA_2x_SOC)         += tegra2_i2s.o
+obj-y                                   += audio_manager.o
+else
+obj-y                                   += tegra_i2s_audio.o
+obj-y                                   += tegra_spdif_audio.o
+endif
+obj-y                                   += spdif.o
+obj-y                                   += tegra_das.o
 obj-y					+= suspend.o
 obj-y					+= mc.o
 obj-$(CONFIG_FIQ)			+= fiq.o
