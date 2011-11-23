@@ -883,7 +883,6 @@ static void ulpi_phy_power_off(struct tegra_usb_phy *phy)
 {
 	unsigned long val;
 	void __iomem *base = phy->regs;
-	struct tegra_ulpi_config *config = phy->config;
 
 	/* Clear WKDS/WKOC wake-on events that can cause the USB
 	 * Controller to immediately bring the ULPI PHY out of low power.
@@ -1376,18 +1375,10 @@ void tegra_usb_phy_clk_enable(struct tegra_usb_phy *phy)
 void tegra_usb_phy_close(struct tegra_usb_phy *phy)
 {
 	if (phy_is_ulpi(phy)) {
-<<<<<<< HEAD
-		struct tegra_ulpi_config *ulpi_config = phy->config;
-
-		if (ulpi_config->inf_type == TEGRA_USB_LINK_ULPI)
-			clk_put(phy->clk);
-	} else
-=======
 		clk_disable(phy->clk);
 		clk_put(phy->clk);
 	}
 	else
->>>>>>> chromeos-2.6.38
 		utmip_pad_close(phy);
 	clk_disable(phy->pll_u);
 	clk_put(phy->pll_u);

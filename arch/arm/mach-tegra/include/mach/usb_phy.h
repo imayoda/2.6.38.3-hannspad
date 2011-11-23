@@ -100,6 +100,7 @@ struct tegra_usb_phy {
 	struct regulator *reg_vdd;
 	bool regulator_on;
 	struct otg_transceiver *ulpi;
+	bool ulpi_initialized;
 };
 
 struct tegra_usb_phy *tegra_usb_phy_open(int instance, void __iomem *regs,
