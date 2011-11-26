@@ -33,9 +33,10 @@ config MACH_ADAM
          Support for the Notion Ink Adam tablet
          
 config MACH_SMBA1002
-       bool "Malata smba1002"
+       bool "HANNSpad board"
        help
-         Support for the Malata smba1002
+         Support for the HANNspree HANNSpad SN10T1 board based on
+         Malata smba1002.
 
 config MACH_AEBL
        bool "Aebl board"

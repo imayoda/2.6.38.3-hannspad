@@ -810,7 +810,7 @@ static int ulpi_phy_power_on(struct tegra_usb_phy *phy)
 	 * Resetting ULPI PHY chip may cause line status to be changed as
 	 * "disconnected" and cause trouble on later resume.
 	 */
-	if (!phy->ulpi_initialized) {
+	if (!phy->initialized) {
 		clk_enable(phy->clk);
 		gpio_direction_output(config->reset_gpio, 0);
 		udelay(1);
@@ -1136,7 +1136,8 @@ static irqreturn_t usb_phy_vbus_irq_thr(int irq, void *pdata)
 }
 
 struct tegra_usb_phy *tegra_usb_phy_open(int instance, void __iomem *regs,
-			void *config, enum tegra_usb_phy_mode phy_mode)
+			void *config, enum tegra_usb_phy_mode phy_mode,
+			enum tegra_usb_phy_type usb_phy_type)
 {
 	struct tegra_usb_phy *phy;
 	struct tegra_ulpi_config *ulpi_config;
@@ -1150,10 +1151,12 @@ struct tegra_usb_phy *tegra_usb_phy_open(int instance, void __iomem *regs,
 		return ERR_PTR(-ENOMEM);
 
 	phy->instance = instance;
+	phy->initialized = 0;
 	phy->regs = regs;
 	phy->config = config;
 	phy->mode = phy_mode;
 	phy->regulator_on = 0;
+	phy->usb_phy_type = usb_phy_type;
 
 	if (!phy->config) {
 		if (phy_is_ulpi(phy)) {
@@ -1238,6 +1241,10 @@ struct tegra_usb_phy *tegra_usb_phy_open(int instance, void __iomem *regs,
 			goto err1;
 		}
 	}
+	if (((phy->instance == 0) || (phy->instance == 2)) &&
+		(phy->mode == TEGRA_USB_PHY_MODE_HOST)) {
+		vbus_enable(usb_phy_data[phy->instance].vbus_gpio);
+	}
 
 	return phy;
 
@@ -1248,6 +1255,8 @@ err0:
 	kfree(phy);
 	return ERR_PTR(err);
 }
+
+EXPORT_SYMBOL_GPL(tegra_usb_phy_open);
 
 int tegra_usb_phy_power_on(struct tegra_usb_phy *phy)
 {
@@ -1267,6 +1276,8 @@ int tegra_usb_phy_power_on(struct tegra_usb_phy *phy)
 		return utmi_phy_power_on(phy);
 }
 
+EXPORT_SYMBOL_GPL(tegra_usb_phy_power_on);
+
 void tegra_usb_phy_power_off(struct tegra_usb_phy *phy)
 {
 	if (phy_is_ulpi(phy)) {
@@ -1285,6 +1296,8 @@ void tegra_usb_phy_power_off(struct tegra_usb_phy *phy)
 		phy->regulator_on = 0;
 	}
 }
+
+EXPORT_SYMBOL_GPL(tegra_usb_phy_power_off);
 
 void tegra_usb_phy_utmi_vbus_init(struct tegra_utmip_config *utmi_config,
 					const char *label)
@@ -1310,6 +1323,8 @@ void tegra_usb_phy_utmi_vbus_init(struct tegra_utmip_config *utmi_config,
 
 	if (!utmi_config->shared_pin_vbus_en_oc)
 		gpio_set_value(utmi_config->vbus_gpio, 1);
+
+gpio_export(utmi_config->vbus_gpio,0);
 
 vbus_gpio_init_exit:
 	if (gpio_status < 0) {
@@ -1387,6 +1402,8 @@ void tegra_usb_phy_close(struct tegra_usb_phy *phy)
 		free_irq(usb_phy_data[0].vbus_irq, phy);
 	kfree(phy);
 }
+
+EXPORT_SYMBOL_GPL(tegra_usb_phy_close);
 
 int tegra_usb_phy_bus_connect(struct tegra_usb_phy *phy)
 {

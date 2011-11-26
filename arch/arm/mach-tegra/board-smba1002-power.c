@@ -183,9 +183,9 @@ static struct regulator_consumer_supply tps658621_rtc_supply[] = {
 };
 
 /* unused */
-/*static struct regulator_consumer_supply tps658621_buck_supply[] = {
+static struct regulator_consumer_supply tps658621_buck_supply[] = {
 	REGULATOR_SUPPLY("pll_e", NULL),
-};*/
+};
 
 /* Super power voltage rail for the SOC : VDD SOC
 */
@@ -265,9 +265,9 @@ static struct regulator_consumer_supply fixed_vdd_aon_supply[] = {
 
 	
 static struct regulator_init_data sm0_data  		 
-	= ADJ_REGULATOR_INIT(sm0,  625, 2700, 1, 1); // 1200
+	= ADJ_REGULATOR_INIT(sm0,  725, 1500, 1, 1); // 1200
 static struct regulator_init_data sm1_data  		 
-	= ADJ_REGULATOR_INIT(sm1,  625, 2700, 1, 1); // 1000 (min was 1100)
+	= ADJ_REGULATOR_INIT(sm1,  725, 1500, 1, 1); // 1000 (min was 1100)
 static struct regulator_init_data sm2_data  		 
 	= ADJ_REGULATOR_INIT(sm2, 3000, 4550, 1, 1); // 3700
 static struct regulator_init_data ldo0_data 		 
@@ -279,21 +279,21 @@ static struct regulator_init_data ldo2_data
 static struct regulator_init_data ldo3_data 		 
 	= ADJ_REGULATOR_INIT(ldo3,1250, 3350, 0, 0); // 3300 
 static struct regulator_init_data ldo4_data 		 
-	= ADJ_REGULATOR_INIT(ldo4,1700, 2000, 0, 0); // 1800
+	= ADJ_REGULATOR_INIT(ldo4,1700, 2000, 1, 1); // 1800
 static struct regulator_init_data ldo5_data 		 
-	= ADJ_REGULATOR_INIT(ldo5,1250, 3350, 0, 1); // 2850
+	= ADJ_REGULATOR_INIT(ldo5,1250, 3350, 1, 1); // 2850
 static struct regulator_init_data ldo6_data 		 
-	= ADJ_REGULATOR_INIT(ldo6,1250, 3350, 0, 1); // 2850  V-3V3 USB
+	= ADJ_REGULATOR_INIT(ldo6,1250, 3350, 1, 1); // 2850  V-3V3 USB
 static struct regulator_init_data ldo7_data 		 
 	= ADJ_REGULATOR_INIT(ldo7,1250, 3350, 0, 0); // 3300  V-SDIO
 static struct regulator_init_data ldo8_data 		 
-	= ADJ_REGULATOR_INIT(ldo8,1250, 3350, 1, 1); // 1800  V-2V8
+	= ADJ_REGULATOR_INIT(ldo8,1250, 3350, 0, 0); // 1800  V-2V8
 static struct regulator_init_data ldo9_data 		 
-	= ADJ_REGULATOR_INIT(ldo9,1250, 3350, 0, 1); // 2850
+	= ADJ_REGULATOR_INIT(ldo9,1250, 3350, 1, 1); // 2850
 static struct regulator_init_data rtc_data  		 
-	= ADJ_REGULATOR_INIT(rtc, 1250, 3350, 0, 1); // 3300
-/*static struct regulator_init_data buck_data 
-	= ADJ_REGULATOR_INIT(buck,1250, 3350, 0, 0); // 3300*/
+	= ADJ_REGULATOR_INIT(rtc, 1250, 3350, 1, 1); // 3300
+static struct regulator_init_data buck_data 
+	= ADJ_REGULATOR_INIT(buck,1250, 3350, 0, 0); // 3300
 	
 static struct regulator_init_data soc_data  		 
 	= ADJ_REGULATOR_INIT(soc, 1250, 3300, 1, 1);
@@ -378,9 +378,16 @@ static struct virtual_adj_voltage_config vdd_aon_cfg = {
 		.platform_data = _data,			\
 	} 	
 
-/* FIXME: do we have rtc alarm irq? */
 static struct tps6586x_rtc_platform_data smba1002_rtc_data = {
-	.irq	= TEGRA_NR_IRQS + TPS6586X_INT_RTC_ALM1, 
+	.irq	= -1,  /* Shuttlle has no IRQ for this RTC :( */
+	.start = {
+		.year  = 2011,
+		.month = 1,
+		.day   = 1,
+		.hour  = 1,
+		.min   = 1,
+		.sec   = 1,
+	},
 };
 
 static struct tps6586x_subdev_info tps_devs[] = {
@@ -398,10 +405,10 @@ static struct tps6586x_subdev_info tps_devs[] = {
 	TPS_ADJ_REG(LDO_8, &ldo8_data),
 	TPS_ADJ_REG(LDO_9, &ldo9_data),
 	//TPS_ADJ_REG(LDO_RTC, &rtc_data),
-	//TPS_ADJ_REG(LDO_SOC, &soc_data),
-	/*TPS_GPIO_FIX_REG(0, &ldo_tps74201_cfg),
+	TPS_ADJ_REG(LDO_SOC, &soc_data),
+	TPS_GPIO_FIX_REG(0, &ldo_tps74201_cfg),
 	TPS_GPIO_FIX_REG(1, &buck_tps62290_cfg),
-	TPS_GPIO_FIX_REG(2, &ldo_tps72012_cfg),*/
+	TPS_GPIO_FIX_REG(2, &ldo_tps72012_cfg),
 	{
 		.id		= -1,
 		.name		= "tps6586x-rtc",
@@ -545,8 +552,12 @@ static void reg_off(const char *reg)
 static void smba1002_power_off(void)
 {
 	/* Power down through NvEC */
-	//nvec_poweroff();
-	
+//	nvec_poweroff();
+
+	/* Turn off main supply */
+ 	 
+   tps6586x_power_off();
+
 	/* Then try by powering off supplies */
 	reg_off("vdd_sm2");
 	reg_off("vdd_core");
@@ -583,14 +594,14 @@ struct platform_device tegra_rtc_device = {
 #endif
 
 static struct platform_device *smba1002_power_devices[] __initdata = {
-	//&smba1002_ldo_tps2051B_reg_device,
-	//&smba1002_vdd_aon_reg_device,
+	&smba1002_ldo_tps2051B_reg_device,
+	&smba1002_vdd_aon_reg_device,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)	
 	&tegra_pmu_device,
 #else
 	&pmu_device,
 #endif
-	//&smba1002_nvec_mfd,
+	&smba1002_nvec_mfd,
 	&tegra_rtc_device,
 	//&smba1002_bq24610_device,
 };
@@ -599,14 +610,14 @@ static struct platform_device *smba1002_power_devices[] __initdata = {
 int __init smba1002_power_register_devices(void)
 {
 	int err;
-	//void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
-	//u32 pmc_ctrl;
+	void __iomem *pmc = IO_ADDRESS(TEGRA_PMC_BASE);
+	u32 pmc_ctrl;
 
 	/* configure the power management controller to trigger PMU
 	 * interrupts when low
 	 */
-	//pmc_ctrl = readl(pmc + PMC_CTRL);
-	//writel(pmc_ctrl | PMC_CTRL_INTR_LOW, pmc + PMC_CTRL);
+	pmc_ctrl = readl(pmc + PMC_CTRL);
+	writel(pmc_ctrl | PMC_CTRL_INTR_LOW, pmc + PMC_CTRL);
 
 	err = i2c_register_board_info(4, smba1002_regulators, 1);
 	if (err < 0) 
@@ -614,6 +625,9 @@ int __init smba1002_power_register_devices(void)
 
 	/* register the poweroff callback */
 	pm_power_off = smba1002_power_off;		
+
+		/* And the restart callback */
+	//tegra_setup_reboot();
 
 	/* signal that power regulators have fully specified constraints */
 	//regulator_has_full_constraints();

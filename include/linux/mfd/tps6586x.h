@@ -1,17 +1,9 @@
 #ifndef __LINUX_MFD_TPS6586X_H
 #define __LINUX_MFD_TPS6586X_H
 
-#define TPS6586X_SLEW_RATE_INSTANTLY	0x00
-#define TPS6586X_SLEW_RATE_110UV	0x01
-#define TPS6586X_SLEW_RATE_220UV	0x02
-#define TPS6586X_SLEW_RATE_440UV	0x03
-#define TPS6586X_SLEW_RATE_880UV	0x04
-#define TPS6586X_SLEW_RATE_1760UV	0x05
-#define TPS6586X_SLEW_RATE_3520UV	0x06
-#define TPS6586X_SLEW_RATE_7040UV	0x07
-
-#define TPS6586X_SLEW_RATE_SET		0x08
-#define TPS6586X_SLEW_RATE_MASK         0x07
+#define SM0_PWM_BIT 0
+#define SM1_PWM_BIT 1
+#define SM2_PWM_BIT 2
 
 enum {
 	TPS6586X_ID_SM_0,
@@ -28,6 +20,7 @@ enum {
 	TPS6586X_ID_LDO_8,
 	TPS6586X_ID_LDO_9,
 	TPS6586X_ID_LDO_RTC,
+	TPS6586X_ID_LDO_SOC,
 };
 
 enum {
@@ -60,8 +53,22 @@ enum {
 	TPS6586X_INT_RTC_ALM2,
 };
 
+enum pwm_pfm_mode {
+	PWM_ONLY,
+	AUTO_PWM_PFM,
+	NOT_CONFIGURABLE
+};
+
 struct tps6586x_settings {
-	int slew_rate;
+	/* SM0, SM1 and SM2 have PWM-only and auto PWM/PFM mode */
+	enum pwm_pfm_mode sm_pwm_mode;
+};
+
+enum {
+	TPS6586X_RTC_CL_SEL_1_5PF  = 0x0,
+	TPS6586X_RTC_CL_SEL_6_5PF  = 0x1,
+	TPS6586X_RTC_CL_SEL_7_5PF  = 0x2,
+	TPS6586X_RTC_CL_SEL_12_5PF = 0x3,
 };
 
 struct tps6586x_subdev_info {
@@ -70,8 +77,19 @@ struct tps6586x_subdev_info {
 	void		*platform_data;
 };
 
+struct tps6586x_epoch_start {
+	int year;
+	int month;
+	int day;
+	int hour;
+	int min;
+	int sec;
+};
+
 struct tps6586x_rtc_platform_data {
 	int irq;
+	struct tps6586x_epoch_start start;
+	int cl_sel; /* internal XTAL capacitance, see TPS6586X_RTC_CL_SEL* */
 };
 
 struct tps6586x_platform_data {
@@ -95,5 +113,6 @@ extern int tps6586x_clr_bits(struct device *dev, int reg, uint8_t bit_mask);
 extern int tps6586x_update(struct device *dev, int reg, uint8_t val,
 			   uint8_t mask);
 extern int tps6586x_power_off(void);
+extern int tps6586x_cancel_sleep(void);
 
 #endif /*__LINUX_MFD_TPS6586X_H */

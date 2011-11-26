@@ -208,6 +208,53 @@ void tegra_otg_check_vbus_detection(void)
 }
 EXPORT_SYMBOL(tegra_otg_check_vbus_detection);
 
+/* Switch interface from host to slave and viceversa */
+void tegra_otg_set_host_mode(bool host_mode)
+{
+	struct otg_transceiver *otg;
+	enum usb_otg_state from;
+	enum usb_otg_state to = OTG_STATE_UNDEFINED;
+
+	otg = &tegra_clone->otg;
+	if (!otg) return;
+	from = otg->state;
+
+	if (tegra_clone->detect_vbus) {
+		tegra_clone->detect_vbus = false;
+		tegra_otg_enable_clk();
+		return;
+	}
+
+	clk_enable(tegra_clone->clk);
+
+	if (host_mode)
+		to = OTG_STATE_A_HOST;
+	else
+		to = OTG_STATE_B_PERIPHERAL;
+
+	otg->state = to;
+
+	dev_info(tegra_clone->otg.dev, "%s --> %s\n", tegra_state_name(from),
+				      tegra_state_name(to));
+
+	if (to == OTG_STATE_A_SUSPEND) {
+		if (from == OTG_STATE_A_HOST)
+			tegra_stop_host(tegra_clone);
+		else if (from == OTG_STATE_B_PERIPHERAL && otg->gadget)
+			usb_gadget_vbus_disconnect(otg->gadget);
+	} else if (to == OTG_STATE_B_PERIPHERAL && otg->gadget) {
+		if (from == OTG_STATE_A_SUSPEND)
+			usb_gadget_vbus_connect(otg->gadget);
+	} else if (to == OTG_STATE_A_HOST) {
+		if (from == OTG_STATE_A_SUSPEND)
+		tegra_start_host(tegra_clone);
+	}
+
+	clk_disable(tegra_clone->clk);
+	tegra_otg_disable_clk();
+}
+EXPORT_SYMBOL(tegra_otg_set_host_mode);
+
 static int tegra_otg_set_peripheral(struct otg_transceiver *otg,
 				struct usb_gadget *gadget)
 {

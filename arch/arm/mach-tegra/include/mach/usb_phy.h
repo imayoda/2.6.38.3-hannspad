@@ -21,6 +21,7 @@
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb/otg.h>
+#include <linux/platform_data/tegra_usb.h>
 
 /*
  * xcvr_effect is only for USB1 to control FUSE_SETUP_SEL
@@ -89,6 +90,7 @@ struct tegra_xtal_freq;
 
 struct tegra_usb_phy {
 	int instance;
+	bool initialized;
 	const struct tegra_xtal_freq *freq;
 	void __iomem *regs;
 	void __iomem *pad_regs;
@@ -98,13 +100,14 @@ struct tegra_usb_phy {
 	enum tegra_usb_phy_mode mode;
 	void *config;
 	struct regulator *reg_vdd;
+	enum tegra_usb_phy_type usb_phy_type;
 	bool regulator_on;
 	struct otg_transceiver *ulpi;
-	bool ulpi_initialized;
 };
 
 struct tegra_usb_phy *tegra_usb_phy_open(int instance, void __iomem *regs,
-			void *config, enum tegra_usb_phy_mode phy_mode);
+			void *config, enum tegra_usb_phy_mode phy_mode,
+			enum tegra_usb_phy_type usb_phy_type);
 
 int tegra_usb_phy_power_on(struct tegra_usb_phy *phy);
 

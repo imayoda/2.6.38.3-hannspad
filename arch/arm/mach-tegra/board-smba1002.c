@@ -92,45 +92,6 @@ static int __init parse_tag_nvidia(const struct tag *tag)
 }
 __tagtable(ATAG_NVIDIA, parse_tag_nvidia);
 
-static atomic_t smba1002_gps_mag_powered = ATOMIC_INIT(0);
-void smba1002_gps_mag_poweron(void)
-{
-	if (atomic_inc_return(&smba1002_gps_mag_powered) == 1) {
-		pr_info("Enabling GPS/Magnetic module\n");
-		/* 3G/GPS power on sequence */
-		gpio_set_value(SMBA1002_GPSMAG_DISABLE, 1); /* Enable power */
-		msleep(2);
-	}
-}
-EXPORT_SYMBOL_GPL(smba1002_gps_mag_poweron);
-
-void smba1002_gps_mag_poweroff(void)
-{
-	if (atomic_dec_return(&smba1002_gps_mag_powered) == 0) {
-		pr_info("Disabling GPS/Magnetic module\n");
-		/* 3G/GPS power on sequence */
-		gpio_set_value(SMBA1002_GPSMAG_DISABLE, 0); /* Disable power */
-		msleep(2);
-	}
-}
-EXPORT_SYMBOL_GPL(smba1002_gps_mag_poweroff);
-
-static atomic_t smba1002_gps_mag_inited = ATOMIC_INIT(0);
-void smba1002_gps_mag_init(void)
-{
-	if (atomic_inc_return(&smba1002_gps_mag_inited) == 1) {
-		gpio_request(SMBA1002_GPSMAG_DISABLE, "gps_disable");
-		gpio_direction_output(SMBA1002_GPSMAG_DISABLE, 0);
-	}
-}
-EXPORT_SYMBOL_GPL(smba1002_gps_mag_init);
-
-void smba1002_gps_mag_deinit(void)
-{
-	atomic_dec(&smba1002_gps_mag_inited);
-}
-EXPORT_SYMBOL_GPL(smba1002_gps_mag_deinit);
-
 static struct tegra_suspend_platform_data smba1002_suspend = {
 	.cpu_timer = 5000,
 	.cpu_off_timer = 5000,
@@ -174,11 +135,11 @@ static void __init tegra_smba1002_init(void)
 		pr_err("Failed to set wifi sdmmc tap delay\n");
 	}
 
-	/* Initialize the clocks */
-	smba1002_clks_init();
-
 	/* Initialize the pinmux */
 	smba1002_pinmux_init();
+
+	/* Initialize the clocks */
+	smba1002_clks_init();
 
 	/* Register i2c devices - required for Power management and MUST be done before the power register */
 	smba1002_i2c_register_devices();
@@ -226,10 +187,10 @@ static void __init tegra_smba1002_init(void)
 //	smba1002_wlan_pm_register_devices();
 	
 	/* Register gps powermanagement devices */
-	smba1002_gps_pm_register_devices();
+//	smba1002_gps_pm_register_devices();
 
 	/* Register gsm powermanagement devices */
-	smba1002_gsm_pm_register_devices();
+//	smba1002_gsm_pm_register_devices();
 	
 	/* Register Bluetooth powermanagement devices */
 	smba1002_bt_pm_register_devices();
@@ -239,9 +200,6 @@ static void __init tegra_smba1002_init(void)
 
 	/* Register NAND flash devices */
 	smba1002_nand_register_devices();
-	
-	smba1002_gps_mag_init();
-	smba1002_gps_mag_poweron();
 #if 0
 	/* Finally, init the external memory controller and memory frequency scaling
    	   NB: This is not working on SMBA1002. And seems there is no point in fixing it,
@@ -301,5 +259,3 @@ static int smba1002_wakeup_key(void)
 	return status & TEGRA_WAKE_GPIO_PV2 ? KEY_POWER : KEY_RESERVED;
 }
 #endif
-
-

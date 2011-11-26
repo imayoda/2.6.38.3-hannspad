@@ -23,7 +23,7 @@
 
 /* GPS and Magnetic sensor share the same enabling IO line */
 #define SMBA1002_GPSMAG_DISABLE  	TEGRA_GPIO_PV3 	/* 0= disabled */
-#define SMBA1002_3G_DISABLE		TEGRA_GPIO_PB0 /* 0 = disabled */
+//#define SMBA1002_3G_DISABLE		TEGRA_GPIO_PB0 /* 0 = disabled */
 #define SMBA1002_KEY_VOLUMEUP 	TEGRA_GPIO_PD4 	/* 0=pressed */
 #define SMBA1002_KEY_VOLUMEDOWN 	TEGRA_GPIO_PV4 	/* 0=pressed */
 #define SMBA1002_KEY_POWER 		TEGRA_GPIO_PV2 	/* 0=pressed */
@@ -61,8 +61,8 @@
 //#define SMBA1002_GPU_MEM_SIZE 		SZ_128M		/* Memory reserved for GPU */
 #define SMBA1002_GPU_MEM_SIZE 	SZ_32M			/* Memory reserved for GPU */
 
-#define SMBA1002_FB1_MEM_SIZE 	SZ_8M			/* Memory reserved for Framebuffer 1: LCD */
-#define SMBA1002_FB2_MEM_SIZE 	SZ_8M			/* Memory reserved for Framebuffer 2: HDMI out */
+#define SMBA1002_FB1_MEM_SIZE 	SZ_4M			/* Memory reserved for Framebuffer 1: LCD */
+#define SMBA1002_FB2_MEM_SIZE 	SZ_2M			/* Memory reserved for Framebuffer 2: HDMI out */
 
 #define DYNAMIC_GPU_MEM 1						/* use dynamic memory for GPU */
 
@@ -101,7 +101,7 @@
 #define SMBA1002_LOW_BATT	TEGRA_GPIO_PW3 /*(0=low battery)*/
 #define SMBA1002_IN_S3		TEGRA_GPIO_PAA7 /*1 = in S3 */
 
-//#define SMBA1002_USB0_VBUS	TEGRA_GPIO_PB0		/* 1= VBUS usb0 */
+#define SMBA1002_USB0_VBUS	TEGRA_GPIO_PB0		/* 1= VBUS usb0 */
 #define SMBA1002_USB1_RESET		TEGRA_GPIO_PV1	/* 0= reset */
 
 #define SMBA1002_HP_DETECT	TEGRA_GPIO_PW2 	/* HeadPhone detect for audio codec: 1=Hedphone plugged */
