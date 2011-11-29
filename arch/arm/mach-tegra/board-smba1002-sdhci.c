@@ -124,11 +124,10 @@ static int smba1002_wifi_power(int on)
         pr_debug("%s: %d\n", __func__, on);
 
         gpio_set_value(SMBA1002_WLAN_POWER, on);
-        mdelay(1000);
+        mdelay(500);
         gpio_set_value(SMBA1002_WLAN_RESET, on);
-        mdelay(2000);
 
-        if (on)        
+        if (on)
                 clk_enable(wifi_32k_clk);
         else
                 clk_disable(wifi_32k_clk);
@@ -219,7 +218,7 @@ int __init smba1002_sdhci_register_devices(void)
 	
 	ret = platform_add_devices(smba1002_sdhci_devices, ARRAY_SIZE(smba1002_sdhci_devices));
 	smba1002_wifi_init();
-	printk(KERN_INFO "SPucki wants powerup after init!\n");
+	// SPucki wants powerup after init!
         smba1002_wifi_power(1); 
 	return ret;
 
