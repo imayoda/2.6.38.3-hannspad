@@ -124,7 +124,7 @@ static int smba1002_wifi_power(int on)
         pr_debug("%s: %d\n", __func__, on);
 
         gpio_set_value(SMBA1002_WLAN_POWER, on);
-        mdelay(500);
+        mdelay(1000);
         gpio_set_value(SMBA1002_WLAN_RESET, on);
 
         if (on)
