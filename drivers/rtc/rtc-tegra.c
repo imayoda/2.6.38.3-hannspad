@@ -54,6 +54,11 @@
 #define TEGRA_RTC_INTR_STATUS_SEC_ALARM1	(1<<1)
 #define TEGRA_RTC_INTR_STATUS_SEC_ALARM0	(1<<0)
 
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+static bool tegra_rtc_set = false; /* RTC does not contain current date */
+static int tegra_rtc_set_time(struct device *dev, struct rtc_time *tm);
+#endif
+
 struct tegra_rtc_info {
 	struct platform_device	*pdev;
 	struct rtc_device	*rtc_dev;
@@ -109,6 +114,27 @@ static int tegra_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	unsigned long sec, msec;
 	unsigned long sl_irq_flags;
 
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	/* If the tegra2 clock is unable to keep time when SoC is shutdown, and
+	   they gave us a backup RTC, use it to init the Tegra2 RTC SoC */
+	if (!tegra_rtc_set) 
+	{
+		struct rtc_device* rtcbak = rtc_class_open(CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		if (rtcbak != NULL) {
+			struct rtc_time tmbak;
+			if (rtc_read_time(rtcbak,&tmbak) == 0) {
+				/* We got the time from the auxiliary RTC - Store it into Tegra2 RTC */
+				tegra_rtc_set_time(dev,&tmbak);
+				tegra_rtc_set = true;
+			} else {
+				dev_err(dev,"Unable to read date from backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+			}
+			rtc_class_close(rtcbak);
+		} else {
+			dev_err(dev,"Unable to open backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		}
+	}
+#endif
 	/* RTC hardware copies seconds to shadow seconds when a read
 	 * of milliseconds occurs. use a lock to keep other threads out. */
 	spin_lock_irqsave(&info->tegra_rtc_lock, sl_irq_flags);
@@ -163,6 +189,22 @@ static int tegra_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	dev_vdbg(dev, "time read back as %d\n",
 		readl(info->rtc_base + TEGRA_RTC_REG_SECONDS));
+
+#ifdef CONFIG_RTC_TEGRA2_BACKUP_RTC
+	/* If the tegra2 clock is unable to keep time when SoC is shutdown, and
+	   they gave us a backup RTC, also store the time in that RTC */
+	{
+		struct rtc_device* rtcbak = rtc_class_open(CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		if (rtcbak != NULL) {
+			if (rtc_set_time(rtcbak,tm) < 0) {
+				dev_err(dev,"Unable to set date to backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+			}
+			rtc_class_close(rtcbak);
+		} else {
+			dev_err(dev,"Unable to open backup RTC '%s'\n",CONFIG_RTC_TEGRA2_BACKUP_RTC_DEV);
+		}
+	}
+#endif
 
 	return ret;
 }
