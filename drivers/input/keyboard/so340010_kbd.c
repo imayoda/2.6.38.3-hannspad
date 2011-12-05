@@ -25,6 +25,7 @@
 #define DRIVER_NAME	"so340010_kbd"
 
 #define SO340010_I2C_TRY_COUNT			10
+#define SO340010_I2C_TRY_RESET_COUNT		10
 
 #define SO340010_TIMER_INTERVAL			2000
 
@@ -330,19 +331,19 @@ static ssize_t so340010_read_sysfs_pending_mask(struct device *device, struct de
 
 static int so340010_reset(struct so340010_kbd_dev *dev)
 {
-	int i;
+	int i, j;
 	unsigned short reg_val;
 
-	for (i = 0; i < sizeof(so340010_register_init_table)/sizeof(so340010_register_init_table[0]); i++) {
-		if (so340010_i2c_write(dev, so340010_register_init_table[i].address, 
-				so340010_register_init_table[i].value, 2)) {
-			goto failed;
+	for (j = 0; j < SO340010_I2C_TRY_RESET_COUNT; j++) {
+		for (i = 0; i < sizeof(so340010_register_init_table)/sizeof(so340010_register_init_table[0]); i++) {
+			so340010_i2c_write(dev, so340010_register_init_table[i].address, 
+				so340010_register_init_table[i].value, 2);
 		}
+		if ((!so340010_i2c_read_word(dev, SO340010_REG_GPIO_STATE, &reg_val))
+			&& (!so340010_i2c_read_word(dev, SO340010_REG_BUTTON_STATE, &reg_val)))
+			break;
 	}
-	if (so340010_i2c_read_word(dev, SO340010_REG_GPIO_STATE, &reg_val)
-		|| so340010_i2c_read_word(dev, SO340010_REG_BUTTON_STATE, &reg_val)) {
-		goto failed;
-	}
+	if (j == SO340010_I2C_TRY_RESET_COUNT) goto failed;
 	dev->pending_keys = 0;
 	dev->last_read = jiffies_to_msecs(jiffies);
 	return 0;
@@ -383,7 +384,7 @@ static void so340010_timer_func(unsigned long __dev)
 static void so340010_work_func(struct work_struct *work)
 {
 	int i, ret;
-	unsigned int gpio_val, button_val;
+	short unsigned int gpio_val, button_val;
 	struct so340010_kbd_dev *dev;
 
 	dev = (struct so340010_kbd_dev *)container_of(work, struct so340010_kbd_dev, work);
@@ -398,10 +399,12 @@ static void so340010_work_func(struct work_struct *work)
 	for (i = 0; i < key_num; i++) {
 		if (button_val & key_table[i].key_mask) {
 			dev->pending_keys |= key_table[i].key_mask;
-			input_report_key(dev->input_dev, key_table[i].key_code, 1);
+			input_event(dev->input_dev, EV_KEY, key_table[i].key_code, 1);
+			input_sync(dev->input_dev);
 		} else {
 			if (dev->pending_keys & key_table[i].key_mask) {
-				input_report_key(dev->input_dev, key_table[i].key_code, 0);
+				input_event(dev->input_dev, EV_KEY, key_table[i].key_code, 0);
+				input_sync(dev->input_dev);
 				dev->pending_keys &= ~(key_table[i].key_mask);
 			}
 		}
@@ -438,7 +441,6 @@ static irqreturn_t  so340010_irq_callback(int irq, void *args)
 static int so340010_kbd_suspend(struct i2c_client *client, pm_message_t state)
 {
 	struct so340010_kbd_dev *dev = i2c_get_clientdata(client);
-	int ret;
 
 	if (WARN_ON(!dev))
 		return -EINVAL;
@@ -451,7 +453,6 @@ static int so340010_kbd_suspend(struct i2c_client *client, pm_message_t state)
 static int so340010_kbd_resume(struct i2c_client *client)
 {
 	struct so340010_kbd_dev *dev = i2c_get_clientdata(client);
-	int ret = 0;
 
 	if (WARN_ON(!dev))
 		return -EINVAL;
@@ -542,7 +543,6 @@ static int so340010_kbd_probe(struct i2c_client *client, const struct i2c_device
 			"so340010_kbd", dev))
 		goto failed_enable_irq;
 
-
 	if (so340010_reset(dev)) {
 		logd(TAG "so340010_kbd_probe so340010_reset fail \r\n");
 		goto failed_reset_hardware;
@@ -628,8 +628,8 @@ static struct i2c_driver so340010_kbd_driver = {
 
 static int __init so340010_kbd_init(void)
 {
-	logd(TAG "so340010_kbd_init\r\n");
 	int e;
+	logd(TAG "so340010_kbd_init\r\n");
 
 	e = i2c_add_driver(&so340010_kbd_driver);
 	if (e != 0) {

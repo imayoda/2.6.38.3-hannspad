@@ -277,6 +277,23 @@ int tps6586x_power_off(void)
 	return 0;
 }
 
+int tps6586x_cancel_sleep(void)
+{
+	struct device *dev = NULL;
+	int ret = -EINVAL;
+
+	if (!tps6586x_i2c_client)
+		return ret;
+
+	dev = &tps6586x_i2c_client->dev;
+	ret = tps6586x_set_bits(dev, TPS6586X_SUPPLYENE, EXITSLREQ_BIT);
+
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
 static int tps6586x_gpio_get(struct gpio_chip *gc, unsigned offset)
 {
 	struct tps6586x *tps6586x = container_of(gc, struct tps6586x, gpio);
@@ -298,6 +315,12 @@ static void tps6586x_gpio_set(struct gpio_chip *chip, unsigned offset,
 
 	tps6586x_update(tps6586x->dev, TPS6586X_GPIOSET2,
 			value << offset, 1 << offset);
+}
+
+static int tps6586x_gpio_input(struct gpio_chip *gc, unsigned offset)
+{
+	/* FIXME: add handling of GPIOs as dedicated inputs */
+	return -ENOSYS;
 }
 
 static int tps6586x_gpio_output(struct gpio_chip *gc, unsigned offset,
@@ -328,7 +351,7 @@ static void tps6586x_gpio_init(struct tps6586x *tps6586x, int gpio_base)
 	tps6586x->gpio.ngpio		= 4;
 	tps6586x->gpio.can_sleep	= 1;
 
-	/* FIXME: add handling of GPIOs as dedicated inputs */
+	tps6586x->gpio.direction_input	= tps6586x_gpio_input;
 	tps6586x->gpio.direction_output	= tps6586x_gpio_output;
 	tps6586x->gpio.set		= tps6586x_gpio_set;
 	tps6586x->gpio.get		= tps6586x_gpio_get;
@@ -543,6 +566,7 @@ static int __devinit tps6586x_i2c_probe(struct i2c_client *client,
 		}
 	}
 
+	/* make sure to first init the GPIO provider, so subdevs can count on it */
 	tps6586x_gpio_init(tps6586x, pdata->gpio_base);
 
 	ret = tps6586x_add_subdevs(tps6586x, pdata);

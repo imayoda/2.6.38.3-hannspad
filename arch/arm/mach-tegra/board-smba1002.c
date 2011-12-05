@@ -170,7 +170,7 @@ static void __init tegra_smba1002_init(void)
 
 	/* Register Watchdog devices */
 	smba1002_wdt_register_devices();
-
+	
 	/* Register all the keyboard devices */
 	smba1002_keyboard_register_devices();
 	
@@ -180,9 +180,9 @@ static void __init tegra_smba1002_init(void)
 	/* Register SDHCI devices */
 	smba1002_sdhci_register_devices();
 
-	/* Register accelerometer device */
+	/* Register sensor devices */
 	smba1002_sensors_register_devices();
-	
+
 	/* Register wlan powermanagement devices */
 //	smba1002_wlan_pm_register_devices();
 	

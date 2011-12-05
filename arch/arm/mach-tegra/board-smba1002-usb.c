@@ -280,7 +280,7 @@ int __init smba1002_usb_register_devices(void)
 	if (ret)
 		return ret;
 
-	tegra_set_gadget_mode();
+	//tegra_set_gadget_mode();
 		
 	usb_kobj = kobject_create_and_add("usbbus", NULL);
 	if (!usb_kobj) {

@@ -112,6 +112,8 @@
 #define SMBA1002_WAKE_KEY_POWER  TEGRA_WAKE_GPIO_PV2
 #define SMBA1002_WAKE_KEY_RESUME TEGRA_WAKE_GPIO_PV2
 
+#define SMBA1002_LIGHT_SENSOR	TEGRA_GPIO_PV5
+
 /* The switch used to indicate rotation lock */
 //#define SW_ROTATION_LOCK 	(SW_MAX-1)
 
