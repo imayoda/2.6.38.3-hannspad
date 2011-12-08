@@ -39,7 +39,7 @@ static struct i2c_board_info __initdata smba1002_i2c_bus2_sensor_info[] = {
 		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_PV6),
 	},
 	 {
-		I2C_BOARD_INFO("isl29018", 0x44),
+		I2C_BOARD_INFO("isl29023", 0x44),
 		.irq = TEGRA_GPIO_TO_IRQ(SMBA1002_LIGHT_SENSOR),
 	 },
 	{
@@ -48,11 +48,17 @@ static struct i2c_board_info __initdata smba1002_i2c_bus2_sensor_info[] = {
 		}
 		
 };
+static struct i2c_board_info __initdata smba1002_i2c_bus4_sensor_info[] = {
+	{
+		I2C_BOARD_INFO("adt7461", 0x4C),
+		.irq = TEGRA_GPIO_TO_IRQ(TEGRA_GPIO_PN6),
+	},
+};
 
 int __init smba1002_sensors_register_devices(void)
 {
 	tegra_gpio_enable(SMBA1002_LIGHT_SENSOR);
-	gpio_request(SMBA1002_LIGHT_SENSOR, "isl29018");
+	gpio_request(SMBA1002_LIGHT_SENSOR, "isl29023");
 	gpio_direction_input(SMBA1002_LIGHT_SENSOR);
 
 	tegra_gpio_enable(TEGRA_GPIO_PH2);
@@ -72,6 +78,6 @@ int __init smba1002_sensors_register_devices(void)
 
  	i2c_register_board_info(2, smba1002_i2c_bus2_sensor_info,
 		ARRAY_SIZE(smba1002_i2c_bus2_sensor_info));
-	return 0;
-;
+	return i2c_register_board_info(4, smba1002_i2c_bus4_sensor_info,
+		ARRAY_SIZE(smba1002_i2c_bus4_sensor_info));
 }

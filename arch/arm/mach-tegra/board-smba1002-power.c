@@ -408,7 +408,7 @@ static struct tps6586x_subdev_info tps_devs[] = {
 	TPS_ADJ_REG(LDO_SOC, &soc_data),
 	TPS_GPIO_FIX_REG(0, &ldo_tps74201_cfg),
 	TPS_GPIO_FIX_REG(1, &buck_tps62290_cfg),
-	TPS_GPIO_FIX_REG(2, &ldo_tps72012_cfg),
+	//TPS_GPIO_FIX_REG(2, &ldo_tps72012_cfg),
 	{
 		.id		= -1,
 		.name		= "tps6586x-rtc",
@@ -594,7 +594,7 @@ struct platform_device tegra_rtc_device = {
 #endif
 
 static struct platform_device *smba1002_power_devices[] __initdata = {
-	&smba1002_ldo_tps2051B_reg_device,
+	//&smba1002_ldo_tps2051B_reg_device,
 	&smba1002_vdd_aon_reg_device,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)	
 	&tegra_pmu_device,
