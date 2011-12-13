@@ -121,7 +121,7 @@ extern void smba1002_gps_mag_poweron(void);
 extern void smba1002_gps_mag_poweroff(void);
 extern void smba1002_gps_mag_init(void);
 
-extern void smba1002_wifi_set_cd(int val);
+extern int smba1002_wifi_set_carddetect(int val);
 
 extern void smba1002_init_emc(void);
 extern void smba1002_pinmux_init(void);

@@ -594,7 +594,7 @@ struct platform_device tegra_rtc_device = {
 #endif
 
 static struct platform_device *smba1002_power_devices[] __initdata = {
-	//&smba1002_ldo_tps2051B_reg_device,
+	&smba1002_ldo_tps2051B_reg_device,
 	&smba1002_vdd_aon_reg_device,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)	
 	&tegra_pmu_device,

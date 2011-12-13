@@ -113,6 +113,7 @@ static __initdata struct tegra_clk_init_table smba1002_clk_init_table[] = {
 # endif
 #endif
 
+    { "pll_e", "clk_m", 120000000, true}, /* hdmi clock */
     /* pll_d and pll_d_out0 are clock sources for HDMI output */
     { "pll_d", "clk_m", 5000000, true}, /* hdmi clock */
 // { "pll_d_out0", "pll_d", 5000000, true}, /* hdmi clock */
@@ -223,8 +224,8 @@ static __initdata struct tegra_clk_init_table smba1002_clk_init_table[] = {
     { "uartd", "pll_p", 216000000, false}, /* tegra_uart.3 uart.3 */
     { "uarte", "pll_p", 216000000, false}, /* tegra_uart.4 uart.4 */
 
-    { "disp1", "pll_p", 216000000, false}, /* tegradc.0 */
-    { "disp2", "pll_p", 216000000, false}, /* tegradc.1 */
+    { "disp1", "pll_p", 190000000, false}, /* tegradc.0 */
+    { "disp2", "pll_p", 190000000, false}, /* tegradc.1 */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
     { "dsi", "pll_d", 5000000, false}, /* tegra_dc.0, tegra_dc.1 */

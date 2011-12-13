@@ -44,7 +44,6 @@ static struct clk *wifi_32k_clk;
 
 static int smba1002_wifi_reset(int on);
 static int smba1002_wifi_power(int on);
-static int smba1002_wifi_set_carddetect(int val);
 
 static struct wifi_platform_data smba1002_wifi_control = {
         .set_power      = smba1002_wifi_power,
@@ -126,6 +125,7 @@ static int smba1002_wifi_power(int on)
         gpio_set_value(SMBA1002_WLAN_POWER, on);
         mdelay(1000);
         gpio_set_value(SMBA1002_WLAN_RESET, on);
+        mdelay(500);
 
         if (on)
                 clk_enable(wifi_32k_clk);

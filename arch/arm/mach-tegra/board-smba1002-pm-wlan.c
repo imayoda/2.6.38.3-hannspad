@@ -20,6 +20,7 @@
 */
 #include <linux/kernel.h>
 #include <linux/init.h>
+#include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -104,7 +105,7 @@ static int smba1002_wlan_set_carddetect(struct device *dev,int val)
 	__smba1002_pm_wlan_toggle_radio(dev,val);
 	
 	/* notify the SDIO layer of the CD change */
-	smba1002_wifi_set_cd(val);
+	smba1002_wifi_set_carddetect(val);
 	return 0;
 } 
 
