@@ -404,30 +404,30 @@ static struct tegra_nand_chip_parms smba1002_nand_chip_parms[] = {
 static struct mtd_partition smba1002_nand_partitions[] = {
 	[0] = {
 		.name		= "misc",
-		.offset		=  9984*1024,
+		.offset		=  11520*1024,
 		.size		=  16384*1024,
 		.mask_flags	= MTD_WRITEABLE, /* r/o */
 	},
 	[1] = {
 		.name		= "recovery",
-		.offset		=  26880*1024,
-		.size		=  16384*1024,
+		.offset		=  52992*1024,
+		.size		=  8192*1024,
 		.mask_flags	= MTD_WRITEABLE, /* r/o */
 	},
 	[2] = {
 		.name		= "boot",
-		.offset		=  43776*1024,
-		.size		=  16384*1024,
+		.offset		=  61696*1024,
+		.size		=  4096*1024,
 	},
 	[3] = {
 		.name		= "system",
-		.offset		=  60672*1024,
+		.offset		=  66304*1024,
 		.size		= 204800*1024,
 	},
 	[4] = {
 		.name		= "cache",
-		.offset		= 266112*1024,
-		.size		=  781952*1024,
+		.offset		= 271104*1024,
+		.size		= 248064*1024,
 	},
 };
 
