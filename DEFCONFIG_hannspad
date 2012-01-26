@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.38.3 Kernel Configuration
-# Thu Dec 15 04:18:24 2011
+# Thu Jan 26 16:02:40 2012
 #
 CONFIG_ARM=y
 CONFIG_HAVE_PWM=y
@@ -846,7 +846,8 @@ CONFIG_RFKILL_GPIO=m
 # Generic Driver Options
 #
 CONFIG_UEVENT_HELPER_PATH=""
-# CONFIG_DEVTMPFS is not set
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
 CONFIG_STANDALONE=y
 CONFIG_PREVENT_FIRMWARE_BUILD=y
 CONFIG_FW_LOADER=y
