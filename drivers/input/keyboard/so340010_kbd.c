@@ -24,8 +24,7 @@
 
 #define DRIVER_NAME	"so340010_kbd"
 
-#define SO340010_I2C_TRY_COUNT			10
-#define SO340010_I2C_TRY_RESET_COUNT		10
+#define SO340010_I2C_TRY_COUNT			3
 
 #define SO340010_TIMER_INTERVAL			2000
 
@@ -45,9 +44,9 @@
  * TODO irq gpio number should be modify in SMBA1102 
  */
 // TODO: Settings from platform_info
-#define SO340010_IRQ_PORT				('v'-'a')
+/*#define SO340010_IRQ_PORT				('v'-'a')
 #define SO340010_IRQ_PIN				6
-#define SO340010_GPIO_DEBOUNCE_TIME		10
+#define SO340010_GPIO_DEBOUNCE_TIME		10*/
 
 #define SO340010_REG_GENERAL_CONFIG		0x0001
 #define SO340010_REG_GPIO_STATE			0x0108
@@ -111,6 +110,7 @@ static struct so340010_kbd_info key_table[] = {
 	{ 0x0004, KEY_MENU },
 	{ 0x0002, KEY_BACK },
 	{ 0x0001, KEY_HOME },
+
 };
 
 static int key_num = sizeof(key_table)/sizeof(key_table[0]);
@@ -160,6 +160,7 @@ static int so340010_i2c_write(struct so340010_kbd_dev *dev, unsigned short reg_s
 	msg.addr = dev->client->addr;
 	msg.len = write_num + 2;
 	msg.buf = write_buffer;
+	msg.flags = I2C_M_IGNORE_NAK;
 
 	ret = i2c_transfer(dev->client->adapter, &msg, 1);
 	if(ret != 1)
@@ -185,7 +186,7 @@ static int so340010_i2c_read(struct so340010_kbd_dev *dev, unsigned short reg_st
 
 	msgs[0].addr = dev->client->addr;
 	msgs[0].len = 2;
-	msgs[0].buf = &reg_buffer;
+	msgs[0].buf = reg_buffer;
 	msgs[0].flags = 0;
 	
 	msgs[1].addr = dev->client->addr;
@@ -331,19 +332,19 @@ static ssize_t so340010_read_sysfs_pending_mask(struct device *device, struct de
 
 static int so340010_reset(struct so340010_kbd_dev *dev)
 {
-	int i, j;
+	int i;
 	unsigned short reg_val;
 
-	for (j = 0; j < SO340010_I2C_TRY_RESET_COUNT; j++) {
-		for (i = 0; i < sizeof(so340010_register_init_table)/sizeof(so340010_register_init_table[0]); i++) {
-			so340010_i2c_write(dev, so340010_register_init_table[i].address, 
-				so340010_register_init_table[i].value, 2);
+	for (i = 0; i < sizeof(so340010_register_init_table)/sizeof(so340010_register_init_table[0]); i++) {
+		if (so340010_i2c_write(dev, so340010_register_init_table[i].address, 
+				so340010_register_init_table[i].value, 2)) {
+			goto failed;
 		}
-		if ((!so340010_i2c_read_word(dev, SO340010_REG_GPIO_STATE, &reg_val))
-			&& (!so340010_i2c_read_word(dev, SO340010_REG_BUTTON_STATE, &reg_val)))
-			break;
 	}
-	if (j == SO340010_I2C_TRY_RESET_COUNT) goto failed;
+	if (so340010_i2c_read_word(dev, SO340010_REG_GPIO_STATE, &reg_val)
+		|| so340010_i2c_read_word(dev, SO340010_REG_BUTTON_STATE, &reg_val)) {
+		goto failed;
+	}
 	dev->pending_keys = 0;
 	dev->last_read = jiffies_to_msecs(jiffies);
 	return 0;
@@ -384,7 +385,7 @@ static void so340010_timer_func(unsigned long __dev)
 static void so340010_work_func(struct work_struct *work)
 {
 	int i, ret;
-	short unsigned int gpio_val, button_val;
+	unsigned short gpio_val, button_val;
 	struct so340010_kbd_dev *dev;
 
 	dev = (struct so340010_kbd_dev *)container_of(work, struct so340010_kbd_dev, work);
@@ -394,7 +395,18 @@ static void so340010_work_func(struct work_struct *work)
 		goto i2c_snag;
 	}
 	
-	logd(TAG "gpio_val=0x%04x, button_val = 0x%04x\r\n", gpio_val, button_val);
+/*	logd(TAG "gpio_val=0x%04x, button_val = 0x%04x\r\n", gpio_val, button_val);
+	
+	for (i = 0; i < key_num; i++) {
+		if (button_val & key_table[i].key_mask) {
+			dev->pending_keys |= key_table[i].key_mask;
+			input_report_key(dev->input_dev, key_table[i].key_code, 1);
+		} else {
+			if (dev->pending_keys & key_table[i].key_mask) {
+				input_report_key(dev->input_dev, key_table[i].key_code, 0);
+				dev->pending_keys &= ~(key_table[i].key_mask); 
+*/
+logd(TAG "gpio_val=0x%04x, button_val = 0x%04x\r\n", gpio_val, button_val);
 	
 	for (i = 0; i < key_num; i++) {
 		if (button_val & key_table[i].key_mask) {
@@ -441,6 +453,7 @@ static irqreturn_t  so340010_irq_callback(int irq, void *args)
 static int so340010_kbd_suspend(struct i2c_client *client, pm_message_t state)
 {
 	struct so340010_kbd_dev *dev = i2c_get_clientdata(client);
+	int ret;
 
 	if (WARN_ON(!dev))
 		return -EINVAL;
@@ -453,6 +466,7 @@ static int so340010_kbd_suspend(struct i2c_client *client, pm_message_t state)
 static int so340010_kbd_resume(struct i2c_client *client)
 {
 	struct so340010_kbd_dev *dev = i2c_get_clientdata(client);
+	int ret = 0;
 
 	if (WARN_ON(!dev))
 		return -EINVAL;
@@ -472,7 +486,7 @@ static void so340010_kbd_early_suspend(struct early_suspend *es)
 	logd(TAG "so340010_kbd_early_suspend() IN\r\n");
 	
 	dev = (struct so340010_kbd_dev *)container_of(es, struct so340010_kbd_dev, early_suspend);
-	enable_irq(dev->client->irq);
+	disable_irq(dev->client->irq);
 	//NvOdmGpioInterruptMask(dev->irq_handle, NV_TRUE);
 	cancel_work_sync(&dev->work);
 	so340010_sleep(dev, true);
@@ -490,12 +504,13 @@ static void so340010_kbd_late_resume(struct early_suspend *es)
 	if (so340010_reset(dev)) {
 		logd(TAG "so340010_reset_failed\r\n");
 	}
-	disable_irq(dev->client->irq);
+	enable_irq(dev->client->irq);
 	//NvOdmGpioInterruptMask(dev->irq_handle, NV_FALSE);
 }
 #endif
 
-static int so340010_kbd_probe(struct i2c_client *client, const struct i2c_device_id *id) 
+static int so340010_kbd_probe(struct i2c_client *client,
+							  const struct i2c_device_id *id) 
 {
 	int i;
 	struct so340010_kbd_dev *dev;
@@ -539,15 +554,18 @@ static int so340010_kbd_probe(struct i2c_client *client, const struct i2c_device
 	}
 
 	INIT_WORK(&dev->work, so340010_work_func);
-	if(request_threaded_irq(client->irq, NULL, so340010_irq_callback, IRQF_TRIGGER_FALLING, 
-			"so340010_kbd", dev))
-		goto failed_enable_irq;
+	
+
 
 	if (so340010_reset(dev)) {
 		logd(TAG "so340010_kbd_probe so340010_reset fail \r\n");
 		goto failed_reset_hardware;
 	}
-
+    if(request_threaded_irq(client->irq, NULL, so340010_irq_callback, IRQF_TRIGGER_FALLING, 
+			"so340010_kbd", dev))
+		goto failed_enable_irq;
+		
+		
 #if (__SO340010_GENERIC_DEBUG__)
 	if (device_create_file(&client->dev, &dev_attr_debug)
 		|| device_create_file(&client->dev, &dev_attr_intr)
@@ -628,8 +646,8 @@ static struct i2c_driver so340010_kbd_driver = {
 
 static int __init so340010_kbd_init(void)
 {
-	int e;
 	logd(TAG "so340010_kbd_init\r\n");
+	int e;
 
 	e = i2c_add_driver(&so340010_kbd_driver);
 	if (e != 0) {
