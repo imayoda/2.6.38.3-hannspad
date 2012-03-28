@@ -1,8 +1,6 @@
 config ZRAM
 	tristate "Compressed RAM block device support"
 	depends on BLOCK
-	select LZO_COMPRESS
-	select LZO_DECOMPRESS
 	default n
 	help
 	  Creates virtual block devices called /dev/zramX (X = 0, 1, ...).
@@ -15,3 +13,19 @@ config ZRAM
 
 	  See zram.txt for more information.
 	  Project home: http://compcache.googlecode.com/
+
+choice ZRAM_COMPRESS
+	prompt "compression method"
+	depends on ZRAM
+	default ZRAM_LZO
+	help
+	  Select the compression method used by zram.
+config ZRAM_LZO
+	bool "LZO compression"
+	depends on LZO_COMPRESS
+	depends on LZO_DECOMPRESS
+config ZRAM_SNAPPY
+	bool "Snappy compression"
+	depends on SNAPPY_COMPRESS
+	depends on SNAPPY_DECOMPRESS
+endchoice
